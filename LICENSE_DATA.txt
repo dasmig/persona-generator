@@ -1,3 +1,4 @@
-The data in the resources/ directory is a sample written for this library.
-List each source here with its licence before the first release (see
-doc/data.md).
+persona-generator has no data of its own: it calls eight dasmig libraries,
+and a persona's data is theirs. Each library states its data sources and
+licences in its own LICENSE_DATA.txt and doc/data.md; doc/data.md here lists
+them by part of the persona.
