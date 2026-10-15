@@ -159,6 +159,14 @@ TEST_CASE("an unknown country is rejected", "[request]")
     REQUIRE_THROWS_AS(psg::instance().get_persona(request_for("ZZ"), seed_a), std::invalid_argument);
 }
 
+TEST_CASE("a country without a name culture is rejected, not given another culture's name", "[request]")
+{
+    // New Zealand has country, city and birth data but no name-generator
+    // culture; name-generator's culture::any would draw any culture's name.
+    REQUIRE_THROWS_WITH(psg::instance().get_persona(request_for("NZ"), seed_a),
+                        Catch::Matchers::ContainsSubstring("no names for country NZ"));
+}
+
 TEST_CASE("ages set the age", "[request]")
 {
     const auto& gen = psg::instance();

@@ -125,7 +125,7 @@ if (!gen.load(dasmig::dataset::lite)) return 1;
 
 ## Supported countries
 
-`psg::supported_countries()` lists the 79 countries a random persona is drawn from: those for which all eight libraries have data in their `lite` tier. Asking for another country is allowed; the libraries then use what they have, or reject it. South Korea, for example, is left out because name-generator's `lite` tier has no Korean male names; with the `full` tier loaded it can be requested.
+`psg::supported_countries()` lists the 79 countries a random persona is drawn from: those for which all eight libraries have data in their `lite` tier. Asking for another country is allowed; the libraries then use what they have, or reject it. South Korea, for example, is left out because name-generator's `lite` tier has no Korean male names; with the `full` tier loaded it can be requested. A country name-generator has no culture for (New Zealand, Thailand) is rejected with `std::invalid_argument`, rather than given a name from another culture.
 
 ## Errors
 

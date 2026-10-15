@@ -436,9 +436,14 @@ class psg
                          std::ranges::transform(lower, lower.begin(), [](char c) {
                              return static_cast<char>(c >= 'A' && c <= 'Z' ? c - 'A' + 'a' : c);
                          });
+                         // An unknown code is culture::any, which would draw a
+                         // name from a random culture: reject it instead.
+                         const auto name_culture = ng::to_culture(core::from_utf8(lower));
+                         if (name_culture == culture::any)
+                             throw std::invalid_argument("persona-generator: name-generator has no names for country "
+                                                         + cca2);
                          auto n = from.name->get_name(
-                             {.gender = b.bio_sex == sex::female ? gender::f : gender::m,
-                              .culture = ng::to_culture(core::from_utf8(lower))},
+                             {.gender = b.bio_sex == sex::female ? gender::f : gender::m, .culture = name_culture},
                              ctx.random()());
                          n.append_surname();
                          return core::to_utf8(static_cast<std::wstring>(n));
