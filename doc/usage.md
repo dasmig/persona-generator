@@ -1,24 +1,22 @@
-# Usage Guide
+# persona-generator Usage Guide
 
-This guide covers every feature of the persona-generator library. For a quick overview, see the [README](../README.md). For the full API reference, run `doxygen Doxyfile` from the repository root and open `doc/api/html/index.html`.
+persona-generator draws a complete character in one call by running the other dasmig generators in dependency order. This guide covers the request, the result, how the draws are conditioned, replay, and using your own data.
 
 [TOC]
 
 <!-- GitHub-rendered TOC (Doxygen uses [TOC] above instead) -->
 <ul>
-<li><a href="#quick-start">Quick Start</a></li>
-<li><a href="#installation">Installation</a></li>
-<li><a href="#loading-resources">Loading Resources</a></li>
-<li><a href="#generating">Generating</a></li>
-<li><a href="#seeding-and-deterministic-generation">Seeding and Deterministic Generation</a></li>
-<li><a href="#extending-data">Extending Data</a></li>
-<li><a href="#replay-and-json">Replay and JSON</a></li>
-<li><a href="#compiled-in-data">Compiled-in Data</a></li>
-<li><a href="#thread-safety">Thread Safety</a></li>
-<li><a href="#error-reference">Error Reference</a></li>
+<li><a href="#a-first-persona">A first persona</a></li>
+<li><a href="#the-request">The request</a></li>
+<li><a href="#the-result">The result</a></li>
+<li><a href="#how-the-draws-are-conditioned">How the draws are conditioned</a></li>
+<li><a href="#seeds-and-replay">Seeds and replay</a></li>
+<li><a href="#data">Data</a></li>
+<li><a href="#supported-countries">Supported countries</a></li>
+<li><a href="#errors">Errors</a></li>
 </ul>
 
-## Quick Start
+## A first persona
 
 ```cpp
 #include <dasmig/personagen.hpp>
@@ -27,94 +25,111 @@ This guide covers every feature of the persona-generator library. For a quick ov
 int main()
 {
     auto& gen = dasmig::psg::instance();
+    if (!gen.has_data()) return 1;
+
     std::cout << gen.get_persona(dasmig::persona_request{}) << '\n';
 }
 ```
 
-## Installation
+`persona_request{}` asks for the defaults: a country drawn by population among the <a href="#supported-countries">supported countries</a>, and an age, sex, city, name, body, interests, occupation and three traits drawn for it.
 
-Copy `dasmig/personagen.hpp`, `dasmig/core.hpp` and the `dasmig/core/` directory into your include path, keeping them together. Supply `resources/` next to the program, or define `DASMIG_PERSONA_EMBED` to compile the `lite` tier in.
+## The request
 
-## Loading Resources
-
-`instance()` loads the `lite` tier on first use (or `full` if there is no `lite`), from the compiled-in copy or from the first of `resources/`, `../resources`, `persona-generator/resources` and `../persona-generator/resources` that has it.
-
-```cpp
-dasmig::psg gen;                       // an empty, independent instance
-bool ok = gen.load(dasmig::dataset::lite); // false when the tier is not found
-gen.load(std::filesystem::path{"path/to/resources/lite"}); // a directory
-gen.has_data();
-gen.count();
-```
-
-Each `load` replaces the data and every layer loaded before.
-
-## Generating
+| Field | Default | Meaning |
+| --- | --- | --- |
+| `country` | drawn | ISO 3166-1 alpha-2 code, any case |
+| `person_sex` | drawn | `dasmig::sex::female` or `male` |
+| `ages` | drawn from the country's age pyramid | `age_range{.min, .max}`, inclusive, in completed years |
+| `reference_date` | 2023-07-01 | The date ages are computed at. The library never reads the clock |
+| `traits` | 3 | How many personality traits |
 
 ```cpp
-auto v = gen.get_persona(dasmig::persona_request{});      // draws a seed from the instance engine
-auto w = gen.get_persona(dasmig::persona_request{}, 1234);  // deterministic; does not touch the engine
-v.key;   // the catalogue key
-v.label; // the display label
+dasmig::persona_request request;
+request.country = "pt";
+request.ages = dasmig::age_range{.min = 18, .max = 30};
+request.reference_date = std::chrono::year_month_day{std::chrono::year{2026}, std::chrono::October, std::chrono::day{14}};
+auto p = gen.get_persona(request);
 ```
 
-Entries are drawn by their `weight` column. An entry with weight 0 is loaded but never drawn.
+The request is never stored: one call cannot change the next.
 
-## Seeding and Deterministic Generation
+## The result
 
-- `get_persona(request, seed)` gives the same result for the same request, seed and data, on every platform, without advancing the instance engine.
-- `get_persona(request)` draws a fresh seed from the instance engine, initially seeded from system entropy. There are no generator-level `seed()` or `unseed()` controls; for deterministic sequences, keep a `dasmig::core::rng` in the caller and pass its next value as the seed.
-- `v.seed()` is the seed a result was generated from: `get_persona(dasmig::persona_request{}, v.seed())` replays it with the same request and data.
+A `persona` holds the typed result of every library, so no JSON parsing is needed to use it:
 
-## Extending Data
+| Member | Type | From |
+| --- | --- | --- |
+| `name` | `std::string` (UTF-8) | name-generator |
+| `country_info` | `dasmig::country` | country-generator |
+| `city_info`, `admin1` | `dasmig::city`, state or province name | city-generator |
+| `birthday` | `dasmig::birth` | birth-generator |
+| `body` | `dasmig::biodata` | biodata-generator |
+| `traits` | `dasmig::personality` | trait-generator |
+| `interests` | `dasmig::interest` | interest-generator |
+| `job` | `dasmig::occupation` | occupation-generator |
 
-The shipped data is a base layer. Files with the same columns as `persona.tsv` can be loaded on top of it to add entries, change them or remove them, without editing the shipped file. Rows are keyed by `key`.
+`age()` and `person_sex()` read the birth. A persona converts to `std::string` and streams as a one-line summary (`Thayna Brandao, 34, female, São Paulo, Brazil, Farm labourer`). `admin1` is empty unless city-generator has its admin1 names loaded (`load_admin1()`).
+
+`to_json()` writes `name`, `sex`, `age`, `admin1` and `signature`, and each library's result under `country`, `city`, `birth`, `biodata`, `personality`, `interest` and `occupation`, exactly as that library writes it (see its guide for the fields).
+
+## How the draws are conditioned
+
+```
+country ──┬─ city
+          ├─ birth ──┬─ biodata   (country, sex, age)
+          │          ├─ name      (country's culture, sex)
+          │          ├─ interest  (country, sex, age)
+          │          └─ occupation (country, sex, age)
+traits
+```
+
+- The **birth** gives the age and the sex, so every later part is conditioned on them: children are shorter, get no adult hobbies and no job, and older people retire.
+- The **name** comes from the culture of the country and the sex.
+- **Traits** are independent of the rest.
+
+The pipeline is declared as [entity-generator](https://github.com/dasmig/entity-generator) fields (`field(...).depends_on(...)`), which checks the dependencies and orders the draws. Each part draws from a stream split from the persona's seed by the field's key, so forcing one choice does not shift the unrelated ones: the same seed with `person_sex = female` and with `male` gives the same country, city and personality.
+
+## Seeds and replay
 
 ```cpp
-// Override mode (the default): a row replaces the loaded row with its key;
-// new keys are added.
-gen.extend("mods/extra.tsv");
-
-// From text, for example supplied by a WebAssembly host.
-gen.extend_from_string("key\tlabel\tweight\nzulu\tZulu\t2\n", "scenario");
-
-// Remove entries: a layer needs only the key and a disabled column.
-gen.extend_from_string("key\tdisabled\nalpha\t1\n", "cleanup");
-
-// Add mode refuses to touch keys that are already loaded.
-gen.extend("mods/new.tsv", dasmig::core::layer_mode::add);
+auto a = gen.get_persona(request);                 // new random seed
+auto b = gen.get_persona(request, a.seed());       // the same persona
+auto c = gen.get_persona(request, 42);             // deterministic, const
 ```
 
-- Every value in a layer is checked before anything changes. A bad layer throws `dasmig::core::tsv_error` with the file, line and column, and the data stays as it was.
-- `layers()` lists what is loaded: source, mode, rows added, replaced and removed, and warnings such as unknown columns.
-- `load(...)` replaces the base and drops every layer.
+`get_persona(request, seed)` is `const` and only calls `const` members of the libraries, so it may run on several threads. `get_persona(request)` draws its seed from the generator's engine and needs external synchronisation.
 
-## Replay and JSON
+`signature()` is `<seed>-<data>`: `data` combines the data hashes of the eight libraries and the request, so a seed replays only against the same data and request.
 
-Every result records the seed and the data it came from:
+## Data
+
+The generator holds no data. It calls the eight libraries' instances, by default their singletons, so whatever they hold is the persona's:
 
 ```cpp
-auto v = gen.get_persona(dasmig::persona_request{});
-v.signature().seed; // the call seed
-v.signature().data; // gen.data_hash() when it was generated
+dasmig::psg gen;
+gen.load(dasmig::dataset::full);              // every library, full tier
+dasmig::bdg::instance().extend("my_countries.tsv");   // one library's layer
 ```
 
-`to_json()` gives the result as JSON, the form the WebAssembly layer and the game consume. Seeds are strings because JavaScript numbers cannot hold every 64-bit value. `to_json(writer)` writes into an existing `dasmig::core::json_writer`, for composing larger documents.
+To keep different data side by side, give the generator your own instances (they must outlive it):
 
-## Compiled-in Data
+```cpp
+dasmig::cntg country; dasmig::cg city; dasmig::bthg birth; dasmig::bdg biodata;
+dasmig::ng name; dasmig::intg interest; dasmig::ocg occupation; dasmig::trtg trait;
+dasmig::psg::sources own{&country, &city, &birth, &biodata, &name, &interest, &occupation, &trait};
+dasmig::psg gen{own};
+if (!gen.load(dasmig::dataset::lite)) return 1;
+```
 
-Define `DASMIG_PERSONA_EMBED` before including the header to compile the `lite` tier into the program. `load(dataset::lite)` and `instance()` then use it and need no files. The compiled-in data has the same `data_hash()` as the file, so seeds replay the same either way.
+`has_data()` is true when all eight can generate; `data_hash()` combines their hashes.
 
-`dasmig/personagen_data.hpp` is generated from `resources/lite` by `make embed`; CI checks it is up to date.
+## Supported countries
 
-## Thread Safety
+`psg::supported_countries()` lists the 79 countries a random persona is drawn from: those for which all eight libraries have data in their `lite` tier. Asking for another country is allowed; the libraries then use what they have, or reject it. South Korea, for example, is left out because name-generator's `lite` tier has no Korean male names; with the `full` tier loaded it can be requested.
 
-Each `psg` instance is independent. Concurrent calls to `get_persona(request)` on the **same** instance require external synchronisation (e.g. a `std::mutex`).
+## Errors
 
-## Error Reference
-
-| Exception | When |
-|-----------|------|
-| `std::runtime_error` | Any generation call before data is loaded |
-| `std::invalid_argument` | Every loaded entry has weight 0 |
-| `dasmig::core::tsv_error` | A malformed `persona.tsv` or layer (message gives file, line and column); the data is unchanged |
+| Error | When |
+| --- | --- |
+| `std::runtime_error` | A library has no data loaded |
+| `std::invalid_argument` | `ages.min > ages.max`, an unknown country, or another input a library rejects |

@@ -1,266 +1,323 @@
 #include "catch_amalgamated.hpp"
 #include "../dasmig/personagen.hpp"
 
-#include <filesystem>
-#include <map>
+#include <algorithm>
+#include <chrono>
 #include <set>
 #include <sstream>
 #include <string>
+#include <string_view>
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
+// The libraries' lite data is compiled in (the Makefile defines the
+// DASMIG_*_EMBED macros), so the singletons have it.
 
-static dasmig::psg make_loaded_generator()
+using dasmig::persona_request;
+using dasmig::psg;
+
+namespace
 {
-    dasmig::psg gen;
-    if (!gen.load(dasmig::dataset::lite))
-    {
-        for (const auto* candidate : {"resources/lite", "../resources/lite"})
-        {
-            if (std::filesystem::is_directory(candidate))
-            {
-                gen.load(std::filesystem::path{candidate});
-                break;
-            }
-        }
-    }
-    REQUIRE(gen.has_data());
-    return gen;
+constexpr std::uint64_t seed_a = 0x0123456789abcdefULL;
+
+persona_request request_for(std::string country)
+{
+    persona_request r;
+    r.country = std::move(country);
+    return r;
 }
+} // namespace
 
 // ---------------------------------------------------------------------------
 // Loading
 // ---------------------------------------------------------------------------
 
-TEST_CASE("load(dataset::lite) loads the catalogue", "[loading]")
+TEST_CASE("the singleton has the data of all eight libraries", "[loading]")
 {
-    const auto gen = make_loaded_generator();
-    REQUIRE(gen.count() > 0);
-    REQUIRE(gen.layers().size() == 1);
+    REQUIRE(psg::instance().has_data());
+    REQUIRE(psg::instance().data_hash() != 0);
 }
 
-TEST_CASE("load - non-existent path is a no-op", "[loading]")
+TEST_CASE("supported_countries is sorted and every country generates", "[loading]")
 {
-    dasmig::psg gen;
-    gen.load(std::filesystem::path{"no/such/directory"});
-    REQUIRE_FALSE(gen.has_data());
-    REQUIRE(gen.data_hash() == 0);
-}
-
-#ifndef DASMIG_PERSONA_EMBED // compiled-in data is never missing
-TEST_CASE("load(dataset) returns false for a missing tier", "[loading]")
-{
-    const auto old_cwd = std::filesystem::current_path();
-    const auto tmp = std::filesystem::temp_directory_path() / "psg_empty_dir";
-    std::filesystem::create_directories(tmp);
-    std::filesystem::current_path(tmp);
-    dasmig::psg gen;
-    const bool loaded = gen.load(dasmig::dataset::full);
-    std::filesystem::current_path(old_cwd);
-    std::filesystem::remove_all(tmp);
-    REQUIRE_FALSE(loaded);
-    REQUIRE_FALSE(gen.has_data());
-}
-#endif
-
-TEST_CASE("the singleton loads data on first use", "[loading]")
-{
-    REQUIRE(dasmig::psg::instance().has_data());
-}
-
-// ---------------------------------------------------------------------------
-// Generation
-// ---------------------------------------------------------------------------
-
-TEST_CASE("get_persona throws when no data is loaded", "[generation]")
-{
-    dasmig::psg gen;
-    REQUIRE_THROWS_AS(gen.get_persona(dasmig::persona_request{}), std::runtime_error);
-    REQUIRE_THROWS_AS(gen.get_persona(dasmig::persona_request{}, std::uint64_t{1}), std::runtime_error);
-}
-
-TEST_CASE("get_persona with a seed is deterministic", "[generation][seed]")
-{
-    const auto gen = make_loaded_generator();
-    for (std::uint64_t s = 0; s < 100; ++s)
+    const auto countries = psg::supported_countries();
+    REQUIRE(countries.size() == 79);
+    REQUIRE(std::ranges::is_sorted(countries));
+    const auto& gen = psg::instance();
+    std::uint64_t seed = 1;
+    for (const auto country : countries)
     {
-        REQUIRE(gen.get_persona(dasmig::persona_request{}, s).to_json() == gen.get_persona(dasmig::persona_request{}, s).to_json());
+        for (const auto person_sex : {dasmig::sex::female, dasmig::sex::male})
+        {
+            CAPTURE(country, person_sex);
+            auto request = request_for(std::string{country});
+            request.person_sex = person_sex;
+            const auto p = gen.get_persona(request, seed++);
+            REQUIRE(p.country_info.cca2 == country);
+            REQUIRE_FALSE(p.name.empty());
+            REQUIRE(p.city_info.country_code == country);
+        }
     }
 }
 
-TEST_CASE("a result replays from its seed", "[generation][seed]")
+TEST_CASE("an independent set of library instances gives the same persona", "[loading]")
 {
-    auto gen = make_loaded_generator();
-    const auto v = gen.get_persona(dasmig::persona_request{});
-    REQUIRE(gen.get_persona(dasmig::persona_request{}, v.seed()).to_json() == v.to_json());
-}
-
-TEST_CASE("explicit per-call seeds replay across generator instances", "[seed]")
-{
-    const auto first = make_loaded_generator();
-    const auto second = make_loaded_generator();
-    REQUIRE(first.get_persona(dasmig::persona_request{}, 42).to_json() == second.get_persona(dasmig::persona_request{}, 42).to_json());
-}
-
-TEST_CASE("draws follow the weights", "[generation][stats]")
-{
-    // The sample weights are 5 : 3 : 1.5 : 0.5 : 0 (total 10).
-    const auto gen = make_loaded_generator();
-    std::map<std::string, int> counts;
-    constexpr int draws = 20000;
-    for (std::uint64_t s = 0; s < draws; ++s) ++counts[gen.get_persona(dasmig::persona_request{}, s).key];
-    REQUIRE(counts["echo"] == 0); // weight 0 is never drawn
-    REQUIRE(counts["alpha"] == Catch::Approx(draws * 0.5).margin(draws * 0.02));
-    REQUIRE(counts["bravo"] == Catch::Approx(draws * 0.3).margin(draws * 0.02));
-    REQUIRE(counts["charlie"] == Catch::Approx(draws * 0.15).margin(draws * 0.02));
-    REQUIRE(counts["delta"] == Catch::Approx(draws * 0.05).margin(draws * 0.02));
+    dasmig::cntg country;
+    dasmig::cg city;
+    dasmig::bthg birth;
+    dasmig::bdg biodata;
+    dasmig::ng name;
+    dasmig::intg interest;
+    dasmig::ocg occupation;
+    dasmig::trtg trait;
+    dasmig::psg::sources own{&country, &city, &birth, &biodata, &name, &interest, &occupation, &trait};
+    dasmig::psg gen{own};
+    REQUIRE_FALSE(gen.has_data());
+    REQUIRE_THROWS_AS(gen.get_persona(persona_request{}, seed_a), std::runtime_error);
+    REQUIRE(gen.load(dasmig::dataset::lite));
+    REQUIRE(gen.has_data());
+    REQUIRE(gen.data_hash() == psg::instance().data_hash());
+    REQUIRE(gen.get_persona(persona_request{}, seed_a).to_json()
+            == psg::instance().get_persona(persona_request{}, seed_a).to_json());
 }
 
 // ---------------------------------------------------------------------------
-// Conversion
+// Determinism and replay
 // ---------------------------------------------------------------------------
 
-TEST_CASE("string conversion and streaming give the label", "[conversion]")
+TEST_CASE("a seed replays a persona; other seeds differ", "[replay]")
 {
-    const auto gen = make_loaded_generator();
-    const auto v = gen.get_persona(dasmig::persona_request{}, std::uint64_t{5});
-    const std::string s = v;
-    std::ostringstream os;
-    os << v;
-    REQUIRE(s == v.label);
-    REQUIRE(os.str() == v.label);
+    const auto& gen = psg::instance();
+    const auto a = gen.get_persona(persona_request{}, seed_a);
+    const auto b = gen.get_persona(persona_request{}, seed_a);
+    REQUIRE(a.to_json() == b.to_json());
+    REQUIRE(a.seed() == seed_a);
+    REQUIRE(a.signature().seed == seed_a);
+    REQUIRE(a.signature().data != 0);
+    REQUIRE(a.signature().to_string() == b.signature().to_string());
+
+    std::set<std::string> distinct;
+    for (std::uint64_t s = 0; s < 50; ++s) distinct.insert(gen.get_persona(persona_request{}, s).to_json());
+    REQUIRE(distinct.size() == 50);
+}
+
+TEST_CASE("an unseeded persona replays through its seed", "[replay]")
+{
+    dasmig::psg gen;
+    const auto a = gen.get_persona(request_for("BR"));
+    const auto b = gen.get_persona(request_for("BR"), a.seed());
+    REQUIRE(a.to_json() == b.to_json());
+    const auto c = gen.get_persona(request_for("BR"));
+    REQUIRE(c.seed() != a.seed());
+}
+
+TEST_CASE("the request is part of the signature", "[replay]")
+{
+    const auto& gen = psg::instance();
+    const auto plain = gen.get_persona(request_for("PT"), seed_a);
+    auto other = request_for("PT");
+    other.traits = 5;
+    REQUIRE(gen.get_persona(other, seed_a).signature().data != plain.signature().data);
+    REQUIRE(gen.get_persona(request_for("PT"), seed_a).signature().data == plain.signature().data);
+}
+
+TEST_CASE("forcing one choice leaves the unrelated draws alone", "[replay]")
+{
+    const auto& gen = psg::instance();
+    persona_request female;
+    female.person_sex = dasmig::sex::female;
+    persona_request male;
+    male.person_sex = dasmig::sex::male;
+    for (std::uint64_t s = 1; s <= 20; ++s)
+    {
+        const auto f = gen.get_persona(female, s);
+        const auto m = gen.get_persona(male, s);
+        REQUIRE(f.person_sex() == dasmig::sex::female);
+        REQUIRE(m.person_sex() == dasmig::sex::male);
+        // The country, the city and the personality do not depend on the sex.
+        REQUIRE(f.country_info.cca2 == m.country_info.cca2);
+        REQUIRE(f.city_info.geonameid == m.city_info.geonameid);
+        REQUIRE(f.traits.to_json() == m.traits.to_json());
+    }
 }
 
 // ---------------------------------------------------------------------------
-// Known answers (rule 2): the same seed and data give these exact results on
-// every compiler and platform. A change here is a change of output and needs
-// a major version. These are the answers for the sample catalogue written by
-// tools/new-library.py; record new ones when the data or the output changes.
+// The request
+// ---------------------------------------------------------------------------
+
+TEST_CASE("the country is honoured in any case", "[request]")
+{
+    const auto& gen = psg::instance();
+    for (const char* code : {"JP", "jp", "Jp"})
+    {
+        const auto p = gen.get_persona(request_for(code), seed_a);
+        REQUIRE(p.country_info.cca2 == "JP");
+        REQUIRE(p.city_info.country_code == "JP");
+    }
+}
+
+TEST_CASE("an unknown country is rejected", "[request]")
+{
+    REQUIRE_THROWS_AS(psg::instance().get_persona(request_for("ZZ"), seed_a), std::invalid_argument);
+}
+
+TEST_CASE("ages set the age", "[request]")
+{
+    const auto& gen = psg::instance();
+    persona_request r;
+    r.ages = dasmig::age_range{.min = 30, .max = 35};
+    for (std::uint64_t s = 1; s <= 40; ++s)
+    {
+        const auto age = gen.get_persona(r, s).age();
+        REQUIRE(age >= 30);
+        REQUIRE(age <= 35);
+    }
+    persona_request bad;
+    bad.ages = dasmig::age_range{.min = 40, .max = 20};
+    REQUIRE_THROWS_AS(gen.get_persona(bad, seed_a), std::invalid_argument);
+}
+
+TEST_CASE("the reference date moves the birth year, not the age", "[request]")
+{
+    const auto& gen = psg::instance();
+    persona_request early;
+    early.country = "DE";
+    early.ages = dasmig::age_range{.min = 40, .max = 40};
+    early.reference_date = std::chrono::year_month_day{std::chrono::year{2000}, std::chrono::January, std::chrono::day{1}};
+    persona_request late = early;
+    late.reference_date = std::chrono::year_month_day{std::chrono::year{2030}, std::chrono::January, std::chrono::day{1}};
+    const auto a = gen.get_persona(early, seed_a);
+    const auto b = gen.get_persona(late, seed_a);
+    REQUIRE(a.age() == 40);
+    REQUIRE(b.age() == 40);
+    REQUIRE(b.birthday.year - a.birthday.year == 30);
+}
+
+TEST_CASE("the number of traits is honoured", "[request]")
+{
+    const auto& gen = psg::instance();
+    for (std::size_t n : {0u, 1u, 3u, 6u})
+    {
+        persona_request r;
+        r.traits = n;
+        REQUIRE(gen.get_persona(r, seed_a).traits.traits.size() == n);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Correlations
+// ---------------------------------------------------------------------------
+
+TEST_CASE("the pipeline is consistent", "[pipeline]")
+{
+    const auto& gen = psg::instance();
+    for (std::uint64_t s = 1; s <= 200; ++s)
+    {
+        const auto p = gen.get_persona(persona_request{}, s);
+        CAPTURE(s, p.to_string());
+        REQUIRE(p.city_info.country_code == p.country_info.cca2);
+        REQUIRE(p.body.bio_sex == p.person_sex());
+        REQUIRE(std::ranges::binary_search(psg::supported_countries(), std::string_view{p.country_info.cca2}));
+    }
+}
+
+TEST_CASE("the age conditions the body and the job", "[pipeline]")
+{
+    const auto& gen = psg::instance();
+    persona_request child;
+    child.country = "US";
+    child.ages = dasmig::age_range{.min = 6, .max = 10};
+    persona_request adult;
+    adult.country = "US";
+    adult.ages = dasmig::age_range{.min = 30, .max = 50};
+    double child_height = 0;
+    double adult_height = 0;
+    int children_in_work = 0;
+    constexpr int n = 200;
+    for (std::uint64_t s = 1; s <= n; ++s)
+    {
+        const auto c = gen.get_persona(child, s);
+        const auto a = gen.get_persona(adult, s);
+        child_height += c.body.height_cm;
+        adult_height += a.body.height_cm;
+        if (c.job.job) ++children_in_work;
+    }
+    REQUIRE(child_height / n < adult_height / n - 30.0);
+    REQUIRE(children_in_work == 0);
+}
+
+// ---------------------------------------------------------------------------
+// Known answers (rule 2): the same seed, request and data give these exact
+// results on every compiler, standard library and CPU.
 // ---------------------------------------------------------------------------
 
 TEST_CASE("known answers for fixed seeds", "[kat]")
 {
-    dasmig::psg gen;
-    gen.load(std::filesystem::path{"resources/lite"});
-    if (!gen.has_data()) gen.load(std::filesystem::path{"../resources/lite"});
-    REQUIRE(gen.has_data());
-    REQUIRE(gen.data_hash() == 0x1f2808f7b5353d9dULL);
+    const auto& gen = psg::instance();
+    REQUIRE(gen.data_hash() == 0x2c51b25a966f8fa8ULL);
 
-    REQUIRE(gen.get_persona(dasmig::persona_request{}, std::uint64_t{1}).to_json() ==
-            R"({"key":"alpha","label":"Alpha","signature":{"seed":"0000000000000001","data":"1f2808f7b5353d9d"}})");
-    REQUIRE(gen.get_persona(dasmig::persona_request{}, std::uint64_t{3}).to_json() ==
-            R"({"key":"bravo","label":"Bravo","signature":{"seed":"0000000000000003","data":"1f2808f7b5353d9d"}})");
-    REQUIRE(gen.get_persona(dasmig::persona_request{}, std::uint64_t{5}).to_json() ==
-            R"({"key":"charlie","label":"Charlie","signature":{"seed":"0000000000000005","data":"1f2808f7b5353d9d"}})");
+    const auto one = gen.get_persona(persona_request{}, 1);
+    REQUIRE(one.to_string() == "Brandon White, 13, male, Gosport, United Kingdom, student");
+    REQUIRE(one.signature().to_string() == "0000000000000001-16ccfc2fe06c547b");
+    const auto two = gen.get_persona(persona_request{}, 2);
+    REQUIRE(two.to_string() == "Romana Nováková, 16, female, Mashhad, Iran, student");
+    REQUIRE(two.signature().to_string() == "0000000000000002-16ccfc2fe06c547b");
 
+    persona_request brazil;
+    brazil.country = "BR";
+    brazil.person_sex = dasmig::sex::female;
+    brazil.ages = dasmig::age_range{.min = 25, .max = 35};
+    brazil.traits = 5;
+    const auto three = gen.get_persona(brazil, 3);
+    REQUIRE(three.to_string() == "Thayna Brandao, 34, female, São Paulo, Brazil, Farm labourer");
+    REQUIRE(three.signature().to_string() == "0000000000000003-a4436f388f2880a1");
+
+    persona_request japan;
+    japan.country = "jp";
+    japan.reference_date = std::chrono::year_month_day{std::chrono::year{2030}, std::chrono::March, std::chrono::day{9}};
+    const auto four = gen.get_persona(japan, 4);
+    REQUIRE(four.to_string() == "Toshinori Toyama, 70, male, Edogawe, Japan, Shop assistant");
+    REQUIRE(four.signature().to_string() == "0000000000000004-b617ce3a636b9167");
+
+    // A hash of 2,000 JSON documents (not 10,000 as in the single-purpose
+    // libraries: a persona runs eight of them, and each is covered there).
     std::uint64_t h = 0xcbf29ce484222325ULL;
-    for (std::uint64_t s = 0; s < 10000; ++s)
+    for (std::uint64_t s = 0; s < 2000; ++s)
     {
-        for (const char c : gen.get_persona(dasmig::persona_request{}, s).to_json())
+        for (const char c : gen.get_persona(persona_request{}, s).to_json())
         {
             h ^= static_cast<unsigned char>(c);
             h *= 0x100000001b3ULL;
         }
     }
-    REQUIRE(h == 0x0c2676f3f5cd4d8dULL);
+    REQUIRE(h == 0xb9d64e6d46c6a12cULL);
 }
 
 // ---------------------------------------------------------------------------
-// JSON and signatures
+// Output
 // ---------------------------------------------------------------------------
 
-TEST_CASE("to_json and signature", "[json]")
+TEST_CASE("the JSON has every part", "[output]")
 {
-    const auto gen = make_loaded_generator();
-    const auto v = gen.get_persona(dasmig::persona_request{}, std::uint64_t{99});
-    REQUIRE(v.signature().seed == 99);
-    REQUIRE(v.seed() == 99);
-    REQUIRE(v.signature().data == gen.data_hash());
-    const auto json = v.to_json();
-    REQUIRE(json.starts_with(R"({"key":")"));
-    REQUIRE(json.find(R"("signature":{"seed":"0000000000000063")") != std::string::npos);
-
-    dasmig::core::json_writer w;
-    w.begin_array();
-    v.to_json(w);
-    w.end_array();
-    REQUIRE(w.str() == "[" + json + "]");
+    const auto json = psg::instance().get_persona(request_for("DE"), seed_a).to_json();
+    for (const char* key : {"\"name\":", "\"sex\":", "\"age\":", "\"admin1\":", "\"country\":{", "\"city\":{",
+                            "\"birth\":{", "\"biodata\":{", "\"personality\":{", "\"interest\":{",
+                            "\"occupation\":{", "\"signature\":{"})
+    {
+        CAPTURE(key);
+        REQUIRE(json.find(key) != std::string::npos);
+    }
+    REQUIRE(json.front() == '{');
+    REQUIRE(json.back() == '}');
+    REQUIRE(std::ranges::count(json, '{') == std::ranges::count(json, '}'));
 }
 
-// ---------------------------------------------------------------------------
-// Extending data (rule 8)
-// ---------------------------------------------------------------------------
-
-TEST_CASE("extend overrides, adds and removes entries", "[extend]")
+TEST_CASE("a persona converts to a string and streams", "[output]")
 {
-    auto gen = make_loaded_generator();
-    const auto base_count = gen.count();
-    const auto base_hash = gen.data_hash();
-    const auto before = gen.get_persona(dasmig::persona_request{}, std::uint64_t{7});
-
-    // Only the new entry has weight: every draw picks it.
-    const auto& info = gen.extend_from_string("key\tlabel\tweight\n"
-                                              "alpha\tAlpha\t0\nbravo\tBravo\t0\n"
-                                              "charlie\tCharlie\t0\ndelta\tDelta\t0\n"
-                                              "zulu\tZulu\t1\n",
-                                              "mod.tsv");
-    REQUIRE(info.replaced == 4);
-    REQUIRE(info.added == 1);
-    REQUIRE(gen.count() == base_count + 1);
-    REQUIRE(gen.data_hash() != base_hash);
-    REQUIRE(gen.layers().size() == 2);
-    const auto after = gen.get_persona(dasmig::persona_request{}, std::uint64_t{7});
-    REQUIRE(after.key == "zulu");
-    REQUIRE(after.signature().data == gen.data_hash());
-
-    gen.extend_from_string("key\tdisabled\nzulu\t1\n", "remove.tsv");
-    REQUIRE(gen.count() == base_count);
-    REQUIRE_THROWS_AS(gen.get_persona(dasmig::persona_request{}, std::uint64_t{7}), std::invalid_argument); // all weights 0
-
-    // Reloading the base drops every layer.
-    REQUIRE(gen.load(dasmig::dataset::lite));
-    REQUIRE(gen.data_hash() == base_hash);
-    REQUIRE(gen.get_persona(dasmig::persona_request{}, std::uint64_t{7}).to_json() == before.to_json());
+    const auto p = psg::instance().get_persona(request_for("FR"), seed_a);
+    const std::string text = p;
+    REQUIRE(text == p.to_string());
+    REQUIRE(text.find(p.name) == 0);
+    REQUIRE(text.find("France") != std::string::npos);
+    std::ostringstream os;
+    os << p;
+    REQUIRE(os.str() == text);
 }
-
-TEST_CASE("a bad layer is rejected and leaves the data unchanged", "[extend][errors]")
-{
-    auto gen = make_loaded_generator();
-    const auto hash = gen.data_hash();
-    const auto count = gen.count();
-
-    REQUIRE_THROWS_WITH(gen.extend_from_string("key\tlabel\tweight\nzulu\tZulu\theavy\n", "bad.tsv"),
-                        "bad.tsv:2: column 'weight': expected a number, got 'heavy'");
-    REQUIRE_THROWS_AS(gen.extend_from_string("key\tlabel\tweight\nzulu\tZulu\t-1\n", "negative.tsv"),
-                      dasmig::core::tsv_error);
-    REQUIRE_THROWS_AS(gen.extend_from_string("key\tlabel\nzulu\tZulu\n", "partial.tsv"),
-                      dasmig::core::tsv_error); // required column missing
-    REQUIRE_THROWS_AS(gen.extend_from_string("key\tlabel\tweight\nalpha\tAlpha\t1\n", "clash.tsv",
-                                             dasmig::core::layer_mode::add),
-                      dasmig::core::tsv_error); // alpha already loaded
-
-    REQUIRE(gen.data_hash() == hash);
-    REQUIRE(gen.count() == count);
-    REQUIRE(gen.layers().size() == 1);
-}
-
-#ifdef DASMIG_PERSONA_EMBED
-TEST_CASE("compiled-in data needs no files and matches them", "[embed]")
-{
-    const auto old_cwd = std::filesystem::current_path();
-    const auto tmp = std::filesystem::temp_directory_path() / "psg_embed_dir";
-    std::filesystem::create_directories(tmp);
-    std::filesystem::current_path(tmp);
-    dasmig::psg gen;
-    const bool loaded = gen.load(dasmig::dataset::lite);
-    std::filesystem::current_path(old_cwd);
-    std::filesystem::remove_all(tmp);
-
-    REQUIRE(loaded);
-    REQUIRE(gen.layers().front().source == "embedded:lite/persona.tsv");
-    REQUIRE(gen.data_hash() == 0x1f2808f7b5353d9dULL); // same as the file
-    REQUIRE(gen.get_persona(dasmig::persona_request{}, std::uint64_t{1}).to_json() ==
-            R"({"key":"alpha","label":"Alpha","signature":{"seed":"0000000000000001","data":"1f2808f7b5353d9d"}})");
-}
-#endif

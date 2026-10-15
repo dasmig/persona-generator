@@ -3,8 +3,8 @@ build/
 *.o
 *.exe
 
-# Local dependencies (not vendored)
-deps/
+# The composed libraries, checked out by CI
+libs/
 
 # Coverage
 coverage/

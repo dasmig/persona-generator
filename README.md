@@ -11,31 +11,35 @@
 
 **[API Reference](https://dasmig.github.io/persona-generator/)** · **[Usage Guide](doc/usage.md)** · **[Data and Method](doc/data.md)** · **[Releases](https://github.com/dasmig/persona-generator/releases)**
 
-Complete characters composed from the other dasmig generators.
+Complete characters composed from the other dasmig generators: one call draws a country, a city, a birth, a body, a name, interests, an occupation and a personality, each conditioned on what was drawn before, and returns them as typed results and one JSON document.
+
+```
+Thayna Brandao, 34, female, São Paulo, Brazil, Farm labourer
+```
 
 ## Features
 
-- **Deterministic Seeding**. Per-call `get_persona(request, seed)` for reproducible results, and `persona::seed()` for replaying a previous generation with the same request and data.
+- **One Call, Eight Libraries**. A country sets the city, the name's culture, the body, the interests and the job; the birth's age and sex set the rest. The order and dependencies are declared as [entity-generator](https://github.com/dasmig/entity-generator) fields, so they are checked, not assumed.
+
+- **Ask for What You Need**. A `persona_request` can fix the country, the sex, an age range, the reference date and the number of traits. What is left out is drawn.
+
+- **Deterministic Seeding**. `get_persona(request, seed)` is a pure function of the request, the seed and the data, and `persona::seed()` replays a previous persona. Each library draws from its own stream split from the seed, so forcing one choice does not shift the others.
 
 - **Identical Everywhere**. A seed gives the same result on every compiler, standard library and CPU (GCC, Clang, MSVC, Emscripten; x86-64 and ARM64), checked by known-answer tests.
 
-- **Extensible Data**. Load your own TSV layers on top of the shipped data to add, change or remove entries (`extend()`), checked before they are applied.
+- **JSON and Replay**. `to_json()` writes every library's result as that library writes it; `signature()` records the seed and a hash of the data of all eight libraries and the request.
 
-- **JSON and Replay**. `to_json()` on every result, and a `signature()` recording the seed and the data it came from.
-
-- **Compiled-in Data**. Define `DASMIG_PERSONA_EMBED` to build the `lite` tier into the program, for WebAssembly and other builds without files.
-
-- **Multi-Instance Support**. Construct independent `psg` instances with their own data and random engine.
+- **Your Data**. The generator holds no data of its own. It calls the instances of the libraries, so their tiers (`lite`, `full`) and layers (`extend()`) are the persona's. Construct a `psg` over your own instances to use different data side by side.
 
 ## Integration
 
-[`personagen.hpp`](https://github.com/dasmig/persona-generator/blob/main/dasmig/personagen.hpp) is the library [released here](https://github.com/dasmig/persona-generator/releases). Keep [`core.hpp`](https://github.com/dasmig/persona-generator/blob/main/dasmig/core.hpp) and the [`core/`](https://github.com/dasmig/persona-generator/tree/main/dasmig/core) directory ([dasmig-core](https://github.com/dasmig/dasmig-core)) in the same directory. Add
+[`personagen.hpp`](https://github.com/dasmig/persona-generator/blob/main/dasmig/personagen.hpp) is the library [released here](https://github.com/dasmig/persona-generator/releases). It composes these libraries, which must be on the include path (with `dasmig-core` in each): [biodata](https://github.com/dasmig/biodata-generator), [birth](https://github.com/dasmig/birth-generator), [city](https://github.com/dasmig/city-generator), [country](https://github.com/dasmig/country-generator), [entity](https://github.com/dasmig/entity-generator), [interest](https://github.com/dasmig/interest-generator), [name](https://github.com/dasmig/name-generator), [occupation](https://github.com/dasmig/occupation-generator) and [trait](https://github.com/dasmig/trait-generator). The release notes list the versions it was tested with. Add
 
 ```cpp
 #include <dasmig/personagen.hpp>
 ```
 
-to the files you want to use it in, and supply the [`resources`](https://github.com/dasmig/persona-generator/tree/main/resources) folder (or define `DASMIG_PERSONA_EMBED`).
+to the files you want to use it in. Each library finds its data as it does alone (a `resources` folder, or its compiled-in `lite` tier: define `DASMIG_COUNTRY_EMBED`, `DASMIG_CITY_EMBED`, `DASMIG_BIRTH_EMBED`, `DASMIG_BIODATA_EMBED`, `DASMIG_NAME_EMBED`, `DASMIG_INTEREST_EMBED`, `DASMIG_OCCUPATION_EMBED` and `DASMIG_TRAIT_EMBED`).
 
 ## Usage
 
@@ -43,28 +47,35 @@ to the files you want to use it in, and supply the [`resources`](https://github.
 #include <dasmig/personagen.hpp>
 #include <iostream>
 
-auto& gen = dasmig::psg::instance(); // loads the lite tier
+auto& gen = dasmig::psg::instance();
 
-auto v = gen.get_persona(dasmig::persona_request{});
-std::cout << v << '\n';           // the label
-std::cout << v.to_json() << '\n'; // {"key":...,"label":...,"signature":{...}}
+auto p = gen.get_persona(dasmig::persona_request{});
+std::cout << p << '\n';           // one line: name, age, sex, city, country, job
+std::cout << p.to_json() << '\n'; // {"name":...,"country":{...},"city":{...},...}
+
+dasmig::persona_request request;
+request.country = "BR";
+request.person_sex = dasmig::sex::female;
+request.ages = dasmig::age_range{.min = 25, .max = 35};
+auto q = gen.get_persona(request);
 
 // The same seed gives the same result everywhere.
-auto again = gen.get_persona(dasmig::persona_request{}, v.seed());
+auto again = gen.get_persona(request, q.seed());
 ```
 
 See the [usage guide](doc/usage.md) for everything else.
 
 ## Building
 
+The libraries it composes are sibling checkouts (`LIBS=..`, the default), with their `lite` data compiled in.
+
 ```bash
 make            # example
 make test       # tests
-make test-embed # tests with the lite tier compiled in
 make coverage   # code coverage
 make lint       # clang-tidy
 make docs       # API docs
-make embed      # regenerate dasmig/personagen_data.hpp from resources/lite
+make test LIBS=path/to/the/libraries   # when they are elsewhere
 ```
 
 ## Compiler Support
@@ -79,7 +90,8 @@ Tested with:
 
 | Dependency | Version | Bundled | Purpose |
 |-----------|---------|---------|---------|
-| [dasmig-core](https://github.com/dasmig/dasmig-core) | 1.0 | Yes (`core.hpp`, `core/`) | Platform-independent random engine and distributions, data layers, JSON |
+| [dasmig-core](https://github.com/dasmig/dasmig-core) | 1.0 | Yes (`core.hpp`, `core/`) | Platform-independent random engine and distributions, JSON |
+| the nine libraries above | see [CI](https://github.com/dasmig/persona-generator/blob/main/.github/actions/checkout-libs/action.yml) | No | The persona's parts |
 | [Catch2](https://github.com/catchorg/Catch2) | 3.x | Yes (amalgamated) | Unit testing |
 
 ## License

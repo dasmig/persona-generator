@@ -1,35 +1,32 @@
 # Data and Method
 
-The data in `resources/` and how persona-generator uses it (rule 6 of the dasmig standard).
+persona-generator has no data of its own. This page records what that means for a persona's data, and what the composition adds (rule 6 of the dasmig standard).
 
-**The shipped catalogue is a placeholder written by `tools/new-library.py`.** Replace it, and this page, before the first release.
+## Where the data comes from
 
-## Tiers
+Each part of a persona comes from one library, and each library documents its own data, sources and limits:
 
-| Tier | Rows | What it holds |
+| Part | Library | Data notes |
 | --- | --- | --- |
-| `lite` | 5 | Sample entries |
+| Country | [country-generator](https://github.com/dasmig/country-generator) | `doc/data.md` |
+| City | [city-generator](https://github.com/dasmig/city-generator) | GeoNames |
+| Birth | [birth-generator](https://github.com/dasmig/birth-generator) | UN World Population Prospects age pyramids |
+| Body | [biodata-generator](https://github.com/dasmig/biodata-generator) | Several sources, partly curated; the library says which |
+| Name | [name-generator](https://github.com/dasmig/name-generator) | `philipperemy/name-dataset`; see the provenance note in its `doc/data.md` |
+| Interests | [interest-generator](https://github.com/dasmig/interest-generator) | CIA World Factbook, Eurostat HETUS, curated catalogue |
+| Job | [occupation-generator](https://github.com/dasmig/occupation-generator) | ILOSTAT with a curated catalogue |
+| Traits | [trait-generator](https://github.com/dasmig/trait-generator) | Authored catalogue |
 
-## Columns
+A persona's data is the union of these, and its `signature().data` is a hash of all eight libraries' loaded data and the request.
 
-`persona.tsv`, keyed by `key`:
+## What the composition decides
 
-| Column | Required | Meaning | Source |
-| --- | --- | --- | --- |
-| `key` | yes | Stable identifier, used by layers | - |
-| `label` | yes | Display label | - |
-| `weight` | yes | Relative frequency, `>= 0` | - |
+- **The supported countries** (`psg::supported_countries()`): the 79 countries for which all eight libraries have data in their `lite` tier, found by generating a persona of each sex for each. It is curated, not computed at run time.
+- **The conditioning**: the birth's age and sex are passed to biodata, interest and occupation; the country's name culture and the sex are passed to name. Nothing else is correlated. In particular the personality is independent of the rest, and there is no correlation between, say, a job and a body beyond the age and sex both depend on.
+- **Biodata is age-adjusted**: the persona passes its age to biodata-generator, so children and the elderly get an age-appropriate body.
 
-For each column, give the source and method, or "curated" with what it was based on, and how reliable it is.
+## Known limits
 
-## Generation Model
-
-One entry is drawn by weight from the `"pick"` stream of the call seed.
-
-## Rebuilding the Data
-
-Derived data is rebuilt by the scripts in `scripts/` (raw downloads stay out of the repository).
-
-## Known Limitations
-
-What the model leaves out.
+- The `lite` tiers are top-rank slices of the full data, so names in a small culture repeat more.
+- name-generator's `lite` Iranian lists hold Czech given names and surnames (the source's Iranian entries are polluted), so personas from Iran can get Czech names. The persona cannot detect it; the fix belongs in name-generator's data.
+- `admin1` (the state or province name) needs city-generator's admin1 file; it is not part of the replay signature.

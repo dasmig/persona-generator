@@ -46,14 +46,14 @@ struct persona_request
 {
     /// @brief ISO 3166-1 alpha-2 code (any case). Unset draws one of
     ///        psg::supported_countries(), weighted by population.
-    std::optional<std::string> country{};
+    std::optional<std::string> country{}; // NOLINT(readability-redundant-member-init)
 
     /// @brief Biological sex; unset draws it from the birth.
-    std::optional<sex> person_sex{};
+    std::optional<sex> person_sex{}; // NOLINT(readability-redundant-member-init)
 
     /// @brief Inclusive age range in completed years; unset draws from the
     ///        country's age pyramid.
-    std::optional<age_range> ages{};
+    std::optional<age_range> ages{}; // NOLINT(readability-redundant-member-init)
 
     /// @brief The date ages are computed at. The default is birth-generator's
     ///        (2023-07-01); the library never reads the clock.
@@ -125,7 +125,7 @@ class persona
         w.begin_object()
             .field("name", name)
             .field("sex", person_sex() == sex::female ? "female" : "male")
-            .field("age", static_cast<unsigned>(age()))
+            .field("age", age())
             .field("admin1", admin1);
         w.key("country");
         country_info.to_json(w);
@@ -238,7 +238,9 @@ class psg
     ///
     /// The countries for which all eight libraries have data in their `lite`
     /// tier. A country can be asked for by `persona_request::country` outside
-    /// this list; the libraries then use what they have for it, or reject it.
+    /// this list; the libraries then use what they have for it, or reject it
+    /// (South Korea, for example, needs name-generator's `full` tier: its
+    /// `lite` tier has no Korean male names).
     /// @return ISO 3166-1 alpha-2 codes, sorted.
     [[nodiscard]] static std::span<const std::string_view> supported_countries()
     {
@@ -258,7 +260,7 @@ class psg
     /// @brief Load a tier into every library.
     /// @param tier `dataset::lite` or `dataset::full`.
     /// @return True when all eight libraries found their data.
-    [[nodiscard]] bool load(dataset tier)
+    [[nodiscard]] bool load(dataset tier) // NOLINT(readability-make-member-function-const)
     {
         bool ok = _from.country->load(tier);
         ok = _from.city->load(tier) && ok;
@@ -353,11 +355,11 @@ class psg
     }
 
   private:
-    static constexpr std::array<std::string_view, 80> supported_ = {
+    static constexpr std::array<std::string_view, 79> supported_ = {
         "AE", "AL", "AR", "AT", "AZ", "BD", "BE", "BG", "BH", "BO", "BR", "CA", "CH", "CL", "CM", "CN",
         "CO", "CR", "CY", "CZ", "DE", "DK", "DZ", "EC", "EE", "EG", "ES", "ET", "FI", "FR", "GB", "GE",
         "GH", "GR", "HN", "HR", "HU", "ID", "IE", "IL", "IN", "IQ", "IR", "IS", "IT", "JM", "JO", "JP",
-        "KR", "KZ", "LB", "LT", "LU", "LY", "MA", "MD", "MT", "MX", "MY", "NG", "NL", "NO", "PE", "PH",
+        "KZ", "LB", "LT", "LU", "LY", "MA", "MD", "MT", "MX", "MY", "NG", "NL", "NO", "PE", "PH",
         "PL", "PT", "RS", "RU", "SA", "SD", "SE", "SG", "SI", "SV", "SY", "TN", "TR", "US", "YE", "ZA"};
 
     static constexpr int max_country_attempts_ = 10000;
@@ -381,7 +383,7 @@ class psg
     {
         const auto from = _from;
 
-        pipeline.add(field<dasmig::country>(L"country", [from](const generation_context& ctx) {
+        pipeline.add(field(L"country", [from](const generation_context& ctx) {
                          if (ctx.has_input("country"))
                              return from.country->find_country(ctx.input<std::string>("country"));
                          for (int i = 0; i < max_country_attempts_; ++i)
@@ -393,14 +395,14 @@ class psg
                      })
                          .data_hash(from.country->data_hash()));
 
-        pipeline.add(field<dasmig::city>(L"city", [from](const generation_context& ctx) {
+        pipeline.add(field(L"city", [from](const generation_context& ctx) {
                          return from.city->get_city(
                              {.country = ctx.get<dasmig::country>(L"country").cca2}, ctx.random()());
                      })
                          .depends_on({L"country"})
                          .data_hash(from.city->data_hash()));
 
-        pipeline.add(field<dasmig::birth>(L"birth", [from](const generation_context& ctx) {
+        pipeline.add(field(L"birth", [from](const generation_context& ctx) {
                          birth_request r;
                          r.country_code = ctx.get<dasmig::country>(L"country").cca2;
                          r.bio_sex = sex_input_(ctx);
@@ -417,7 +419,7 @@ class psg
                          .depends_on({L"country"})
                          .data_hash(from.birth->data_hash()));
 
-        pipeline.add(field<dasmig::biodata>(L"biodata", [from](const generation_context& ctx) {
+        pipeline.add(field(L"biodata", [from](const generation_context& ctx) {
                          const auto cca2 = ctx.get<dasmig::country>(L"country").cca2;
                          const auto b = ctx.get<dasmig::birth>(L"birth");
                          return from.biodata->get_biodata(
@@ -427,7 +429,7 @@ class psg
                          .depends_on({L"country", L"birth"})
                          .data_hash(from.biodata->data_hash()));
 
-        pipeline.add(field<std::string>(L"name", [from](const generation_context& ctx) {
+        pipeline.add(field(L"name", [from](const generation_context& ctx) {
                          const auto cca2 = ctx.get<dasmig::country>(L"country").cca2;
                          const auto b = ctx.get<dasmig::birth>(L"birth");
                          std::string lower = cca2;
@@ -444,14 +446,14 @@ class psg
                          .depends_on({L"country", L"birth"})
                          .data_hash(from.name->data_hash()));
 
-        pipeline.add(field<dasmig::personality>(L"traits", [from](const generation_context& ctx) {
+        pipeline.add(field(L"traits", [from](const generation_context& ctx) {
                          return from.trait->get_personality(
                              {.count = static_cast<std::size_t>(ctx.input<std::int64_t>("traits"))},
                              ctx.random()());
                      })
                          .data_hash(from.trait->data_hash()));
 
-        pipeline.add(field<dasmig::interest>(L"interest", [from](const generation_context& ctx) {
+        pipeline.add(field(L"interest", [from](const generation_context& ctx) {
                          const auto b = ctx.get<dasmig::birth>(L"birth");
                          interest_request r;
                          const auto cca2 = ctx.get<dasmig::country>(L"country").cca2;
@@ -463,7 +465,7 @@ class psg
                          .depends_on({L"country", L"birth"})
                          .data_hash(from.interest->data_hash()));
 
-        pipeline.add(field<dasmig::occupation>(L"occupation", [from](const generation_context& ctx) {
+        pipeline.add(field(L"occupation", [from](const generation_context& ctx) {
                          const auto b = ctx.get<dasmig::birth>(L"birth");
                          occupation_request r;
                          const auto cca2 = ctx.get<dasmig::country>(L"country").cca2;

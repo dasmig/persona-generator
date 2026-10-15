@@ -1,5 +1,10 @@
 CXX      := clang++
-CXXFLAGS := -std=c++23 -Wall -Wextra -Wpedantic -Wno-c2y-extensions -I.
+# The libraries this one composes are sibling checkouts (see README.md); set
+# LIBS to the folder that holds them. Their lite data is compiled in.
+LIBS     ?= ..
+LIB_DIRS := biodata birth city country entity interest name occupation trait
+EMBED    := $(addprefix -DDASMIG_,COUNTRY_EMBED CITY_EMBED BIRTH_EMBED BIODATA_EMBED NAME_EMBED INTEREST_EMBED OCCUPATION_EMBED TRAIT_EMBED)
+CXXFLAGS := -std=c++23 -Wall -Wextra -Wpedantic -Wno-c2y-extensions -I. $(foreach d,$(LIB_DIRS),-I$(LIBS)/$(d)-generator) $(EMBED)
 BUILD    := build
 PYTHON   := python3
 
@@ -14,7 +19,7 @@ TEST_BIN := $(BUILD)/test_runner
 COV_FLAGS := -fprofile-instr-generate -fcoverage-mapping
 COV_DIR   := coverage
 
-.PHONY: all clean lint test test-embed coverage docs embed
+.PHONY: all clean lint test coverage docs
 
 all: $(EXAMPLE_BIN)
 
@@ -26,15 +31,6 @@ $(TEST_BIN): $(TEST_SRC) $(HEADERS) | $(BUILD)
 
 test: $(TEST_BIN)
 	./$(TEST_BIN)
-
-# The same tests with the lite tier compiled in (DASMIG_PERSONA_EMBED).
-test-embed: $(TEST_SRC) $(HEADERS) dasmig/personagen_data.hpp | $(BUILD)
-	$(CXX) $(CXXFLAGS) -DDASMIG_PERSONA_EMBED -o $(BUILD)/test_embed $(TEST_SRC)
-	./$(BUILD)/test_embed
-
-# Regenerate the compiled-in copy of the lite tier.
-embed:
-	$(PYTHON) scripts/embed.py resources --tier lite --name personagen --output dasmig/personagen_data.hpp
 
 coverage: $(TEST_SRC) $(HEADERS) | $(BUILD)
 	$(CXX) $(CXXFLAGS) $(COV_FLAGS) -o $(BUILD)/test_cov $(TEST_SRC)
@@ -52,7 +48,7 @@ docs:
 	@echo "API docs: doc/api/html/index.html"
 
 lint:
-	clang-tidy $(EXAMPLE_SRC) -- $(CXXFLAGS)
+	clang-tidy --header-filter='personagen[.]hpp' $(EXAMPLE_SRC) -- $(CXXFLAGS)
 
 clean:
 	rm -rf $(BUILD) $(COV_DIR) doc/api
