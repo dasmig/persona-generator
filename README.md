@@ -21,6 +21,8 @@ Thayna Brandao, 34, female, São Paulo, Brazil, Farm labourer
 
 - **One Call, Eight Libraries**. A country sets the city, the name's culture, the body, the interests and the job; the birth's age and sex set the rest. The order and dependencies are declared as [entity-generator](https://github.com/dasmig/entity-generator) fields, so they are checked, not assumed.
 
+- **Batch Generation**. Generate thousands of results from one seed, on several threads with the same output for any thread count, optionally unique by a key, and stream them as JSON Lines or CSV (see the usage guide).
+
 - **Ask for What You Need**. A `persona_request` can fix the country, the sex, an age range, the reference date and the number of traits. What is left out is drawn.
 
 - **Deterministic Seeding**. `get_persona(request, seed)` is a pure function of the request, the seed and the data, and `persona::seed()` replays a previous persona. Each library draws from its own stream split from the seed, so forcing one choice does not shift the others.
