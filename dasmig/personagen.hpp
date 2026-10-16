@@ -36,7 +36,7 @@
 /// @author Diego Dasso Migotto (diegomigotto at hotmail dot com)
 /// @see See doc/usage.md for the narrative tutorial.
 
-DASMIG_CORE_REQUIRE(1, 0);
+DASMIG_CORE_REQUIRE(1, 1);
 
 namespace dasmig
 {
@@ -357,6 +357,82 @@ class psg
         p._signature = e.signature();
         return p;
     }
+
+    // -- Batch generation -------------------------------------------------
+
+    /// @brief Generate a batch of persona results from a seed drawn like
+    ///        get_persona() draws its own.
+    ///
+    /// Item `i` is `get_persona(request, core::item_seed(batch_seed, options.first + i))`
+    /// for the drawn batch seed; see the seeded overload.
+    ///
+    /// @param request What every item is generated from.
+    /// @param options Count, first index, threads and uniqueness.
+    /// @return The results, in index order.
+    [[nodiscard]] std::vector<persona> get_persona_batch(const persona_request& request,
+                                                  const core::batch_options& options)
+    {
+        return get_persona_batch(request, options, _engine());
+    }
+
+    /// @brief Generate a batch of persona results, deterministically.
+    ///
+    /// Item `i` is exactly `get_persona(request, core::item_seed(batch_seed,
+    /// options.first + i))`, so an item replays on its own, a range can be
+    /// generated directly, two batches that follow each other equal one, and
+    /// the output does not depend on `options.threads`.
+    ///
+    /// @param request What every item is generated from.
+    /// @param options Count, first index, threads and uniqueness (see
+    ///        core::unique_rule; the rule must be made for `persona`).
+    /// @param batch_seed Seed of the whole batch.
+    /// @return The results, in index order.
+    /// @throws std::invalid_argument If the request or options are invalid.
+    /// @throws std::runtime_error If no data has been loaded, or a unique
+    ///         batch runs out of attempts.
+    [[nodiscard]] std::vector<persona> get_persona_batch(const persona_request& request,
+                                                  const core::batch_options& options,
+                                                  std::uint64_t batch_seed) const
+    {
+        return core::run_batch(options, batch_seed, [&](std::uint64_t item_seed)
+                               { return get_persona(request, item_seed); });
+    }
+
+    /// @brief Stream a batch of persona results to a sink without holding the
+    ///        whole batch.
+    ///
+    /// Generates the same items as get_persona_batch() and calls
+    /// `sink(index, item)` in index order on the calling thread; `index`
+    /// includes `options.first`.
+    ///
+    /// @tparam Sink Callable taking `(std::uint64_t, persona&)`; for example
+    ///         core::jsonl_writer or core::csv_writer.
+    /// @param request What every item is generated from.
+    /// @param options Count, first index, threads and uniqueness.
+    /// @param batch_seed Seed of the whole batch.
+    /// @param sink Receives the items.
+    template <typename Sink>
+    void for_each_persona(const persona_request& request, const core::batch_options& options,
+                        std::uint64_t batch_seed, Sink&& sink) const
+    {
+        core::for_each_batch(options, batch_seed,
+                             [&](std::uint64_t item_seed) { return get_persona(request, item_seed); },
+                             std::forward<Sink>(sink));
+    }
+
+    /// @brief Stream a batch of persona results with a batch seed drawn like
+    ///        get_persona() draws its own.
+    /// @tparam Sink Callable taking `(std::uint64_t, persona&)`.
+    /// @param request What every item is generated from.
+    /// @param options Count, first index, threads and uniqueness.
+    /// @param sink Receives the items.
+    template <typename Sink>
+    void for_each_persona(const persona_request& request, const core::batch_options& options,
+                        Sink&& sink)
+    {
+        for_each_persona(request, options, _engine(), std::forward<Sink>(sink));
+    }
+
 
   private:
     static constexpr std::array<std::string_view, 79> supported_ = {

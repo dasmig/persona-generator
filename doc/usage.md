@@ -127,6 +127,32 @@ if (!gen.load(dasmig::dataset::lite)) return 1;
 
 `psg::supported_countries()` lists the 79 countries a random persona is drawn from: those for which all eight libraries have data in their `lite` tier. Asking for another country is allowed; the libraries then use what they have, or reject it. South Korea, for example, is left out because name-generator's `lite` tier has no Korean male names; with the `full` tier loaded it can be requested. A country name-generator has no culture for (New Zealand, Thailand) is rejected with `std::invalid_argument`, rather than given a name from another culture.
 
+## Batch Generation
+
+Every seeded getter has batch forms: `get_persona_batch` return a `std::vector`, and `for_each_persona` streams the items to a sink in index order without holding the batch.
+
+```cpp
+auto& gen = dasmig::psg::instance();
+const auto request = persona_request{};
+
+// 1,000 results from one batch seed, on four threads.
+auto items = gen.get_persona_batch(request, {.count = 1000, .threads = 4}, 42);
+
+// Item 1 replays on its own: the batch seed and the index give its seed.
+auto again = gen.get_persona(request, dasmig::core::item_seed(42, 1));
+
+// A million results to a file as JSON Lines, never all in memory.
+std::ofstream out{"items.jsonl"};
+dasmig::core::jsonl_writer lines{out};
+gen.for_each_persona(request, {.count = 1'000'000, .threads = 0}, 42, lines);
+```
+
+- **Item seeds.** Item `i` is exactly `get_persona(request, core::item_seed(batch_seed, first + i))`. A range can be generated directly (`first = 1000` starts at item 1000), two batches that follow each other equal one, and the output is the same for any `threads` (0 means the hardware count). Without a `batch_seed` one is drawn like the single getter draws its own.
+- **Options.** `core::batch_options` has `count`, `first`, `threads` and `unique`. The request describes one item; the options describe the batch.
+- **Uniqueness.** `.unique = core::unique_rule::by<persona>(key)` regenerates an item whose key already appeared in the batch, with a deterministic retry seed, and throws `std::runtime_error` naming the item when the attempts run out.
+- **Sinks.** `core::jsonl_writer` writes one `to_json()` per line, `core::csv_writer` flattens each result's JSON into dotted columns. Any callable `(std::uint64_t index, persona&)` works.
+- Batch calls use the same const getters from several threads, which the thread-safety rules above allow; the CI runs the batch tests under ThreadSanitizer.
+
 ## Errors
 
 | Error | When |
