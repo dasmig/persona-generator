@@ -6,10 +6,12 @@
 
 #include "core.hpp"
 #include <algorithm>
+#include <any>
 #include <array>
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <memory>
 #include <optional>
 #include <ostream>
 #include <span>
@@ -17,6 +19,7 @@
 #include <string>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 #include <dasmig/biodatagen.hpp>
 #include <dasmig/birthgen.hpp>
@@ -216,12 +219,12 @@ class psg
     };
 
     /// @brief Draws from the singletons of the eight libraries.
-    psg() = default;
+    psg() { build_(); }
 
     /// @brief Draws from the given library instances (which must outlive this
     ///        generator).
     /// @param from The instances to use.
-    explicit psg(sources from) : _from{from} {}
+    explicit psg(sources from) : _from{from} { build_(); }
 
     psg(const psg&) = delete;            ///< Not copyable.
     psg& operator=(const psg&) = delete; ///< Not copyable.
@@ -338,9 +341,7 @@ class psg
             + static_cast<std::int64_t>(static_cast<unsigned>(request.reference_date.day()));
         er.inputs["traits"] = static_cast<std::int64_t>(request.traits);
 
-        eg pipeline;
-        build_(pipeline);
-        const auto e = pipeline.generate(er, call_seed);
+        const auto e = _pipeline.generate(er, call_seed);
 
         persona p;
         p.country_info = e.get<dasmig::country>(L"country");
@@ -369,6 +370,40 @@ class psg
 
     sources _from{};
     core::rng _engine{core::rng::from_entropy()};
+    eg _pipeline; // Built once, by build_().
+
+    // One library's step in the pipeline. Unlike entity-generator's field(),
+    // it reads the library's data hash at each call, so the pipeline is built
+    // once and data loaded into a library later still reaches the signature;
+    // and it does not format the value, which only the persona shows.
+    template <typename Lib, typename Fn>
+    class step_ final : public component
+    {
+      public:
+        step_(std::wstring key, std::vector<std::wstring> depends, const Lib* lib, Fn fn)
+            : _key{std::move(key)}, _depends{std::move(depends)}, _lib{lib}, _fn{std::move(fn)}
+        {
+        }
+
+        [[nodiscard]] std::wstring key() const override { return _key; }
+        [[nodiscard]] std::vector<std::wstring> depends_on() const override { return _depends; }
+        [[nodiscard]] std::uint64_t data_hash() const override { return _lib->data_hash(); }
+        [[nodiscard]] std::any generate(const generation_context& ctx) const override { return std::any{_fn(ctx)}; }
+        [[nodiscard]] std::wstring to_string(const std::any& /*value*/) const override { return {}; }
+        [[nodiscard]] json_value to_json(const std::any& /*value*/) const override { return {}; }
+
+      private:
+        std::wstring _key;
+        std::vector<std::wstring> _depends;
+        const Lib* _lib;
+        Fn _fn;
+    };
+
+    template <typename Lib, typename Fn>
+    void add_(std::wstring key, std::vector<std::wstring> depends, const Lib* lib, Fn fn)
+    {
+        _pipeline.add(std::make_unique<step_<Lib, Fn>>(std::move(key), std::move(depends), lib, std::move(fn)));
+    }
 
     [[nodiscard]] static bool is_supported_(std::string_view cca2)
     {
@@ -382,108 +417,94 @@ class psg
     }
 
     /// The fields of the pipeline, in the order they depend on each other.
-    void build_(eg& pipeline) const
+    void build_()
     {
         const auto from = _from;
 
-        pipeline.add(field(L"country", [from](const generation_context& ctx) {
-                         if (ctx.has_input("country"))
-                             return from.country->find_country(ctx.input<std::string>("country"));
-                         for (int i = 0; i < max_country_attempts_; ++i)
-                         {
-                             auto c = from.country->get_country({}, ctx.random()());
-                             if (is_supported_(c.cca2)) return c;
-                         }
-                         throw std::runtime_error("persona-generator: no supported country in the country data");
-                     })
-                         .data_hash(from.country->data_hash()));
+        add_(L"country", {}, from.country, [from](const generation_context& ctx) {
+                 if (ctx.has_input("country"))
+                     return from.country->find_country(ctx.input<std::string>("country"));
+                 for (int i = 0; i < max_country_attempts_; ++i)
+                 {
+                     auto c = from.country->get_country({}, ctx.random()());
+                     if (is_supported_(c.cca2)) return c;
+                 }
+                 throw std::runtime_error("persona-generator: no supported country in the country data");
+             });
 
-        pipeline.add(field(L"city", [from](const generation_context& ctx) {
-                         return from.city->get_city(
-                             {.country = ctx.get<dasmig::country>(L"country").cca2}, ctx.random()());
-                     })
-                         .depends_on({L"country"})
-                         .data_hash(from.city->data_hash()));
+        add_(L"city", {L"country"}, from.city, [from](const generation_context& ctx) {
+                 return from.city->get_city(
+                     {.country = ctx.get<const dasmig::country&>(L"country").cca2}, ctx.random()());
+             });
 
-        pipeline.add(field(L"birth", [from](const generation_context& ctx) {
-                         birth_request r;
-                         r.country_code = ctx.get<dasmig::country>(L"country").cca2;
-                         r.bio_sex = sex_input_(ctx);
-                         if (ctx.has_input("age_min"))
-                             r.ages = age_range{.min = static_cast<std::uint8_t>(ctx.input<std::int64_t>("age_min")),
-                                                .max = static_cast<std::uint8_t>(ctx.input<std::int64_t>("age_max"))};
-                         const auto d = ctx.input<std::int64_t>("reference_date");
-                         r.reference_date = std::chrono::year_month_day{
-                             std::chrono::year{static_cast<int>(d / 10000)},
-                             std::chrono::month{static_cast<unsigned>(d / 100 % 100)},
-                             std::chrono::day{static_cast<unsigned>(d % 100)}};
-                         return from.birth->get_birth(r, ctx.random()());
-                     })
-                         .depends_on({L"country"})
-                         .data_hash(from.birth->data_hash()));
+        add_(L"birth", {L"country"}, from.birth, [from](const generation_context& ctx) {
+                 birth_request r;
+                 r.country_code = ctx.get<const dasmig::country&>(L"country").cca2;
+                 r.bio_sex = sex_input_(ctx);
+                 if (ctx.has_input("age_min"))
+                     r.ages = age_range{.min = static_cast<std::uint8_t>(ctx.input<std::int64_t>("age_min")),
+                                        .max = static_cast<std::uint8_t>(ctx.input<std::int64_t>("age_max"))};
+                 const auto d = ctx.input<std::int64_t>("reference_date");
+                 r.reference_date = std::chrono::year_month_day{
+                     std::chrono::year{static_cast<int>(d / 10000)},
+                     std::chrono::month{static_cast<unsigned>(d / 100 % 100)},
+                     std::chrono::day{static_cast<unsigned>(d % 100)}};
+                 return from.birth->get_birth(r, ctx.random()());
+             });
 
-        pipeline.add(field(L"biodata", [from](const generation_context& ctx) {
-                         const auto cca2 = ctx.get<dasmig::country>(L"country").cca2;
-                         const auto b = ctx.get<dasmig::birth>(L"birth");
-                         return from.biodata->get_biodata(
-                             {.country = cca2, .bio_sex = b.bio_sex, .age = std::min<unsigned>(b.age, 120)},
-                             ctx.random()());
-                     })
-                         .depends_on({L"country", L"birth"})
-                         .data_hash(from.biodata->data_hash()));
+        add_(L"biodata", {L"country", L"birth"}, from.biodata, [from](const generation_context& ctx) {
+                 const auto& cca2 = ctx.get<const dasmig::country&>(L"country").cca2;
+                 const auto& b = ctx.get<const dasmig::birth&>(L"birth");
+                 return from.biodata->get_biodata(
+                     {.country = cca2, .bio_sex = b.bio_sex, .age = std::min<unsigned>(b.age, 120)},
+                     ctx.random()());
+             });
 
-        pipeline.add(field(L"name", [from](const generation_context& ctx) {
-                         const auto cca2 = ctx.get<dasmig::country>(L"country").cca2;
-                         const auto b = ctx.get<dasmig::birth>(L"birth");
-                         std::string lower = cca2;
-                         std::ranges::transform(lower, lower.begin(), [](char c) {
-                             return static_cast<char>(c >= 'A' && c <= 'Z' ? c - 'A' + 'a' : c);
-                         });
-                         // An unknown code is culture::any, which would draw a
-                         // name from a random culture: reject it instead.
-                         const auto name_culture = ng::to_culture(core::from_utf8(lower));
-                         if (name_culture == culture::any)
-                             throw std::invalid_argument("persona-generator: name-generator has no names for country "
-                                                         + cca2);
-                         auto n = from.name->get_name(
-                             {.gender = b.bio_sex == sex::female ? gender::f : gender::m, .culture = name_culture},
-                             ctx.random()());
-                         n.append_surname();
-                         return core::to_utf8(static_cast<std::wstring>(n));
-                     })
-                         .depends_on({L"country", L"birth"})
-                         .data_hash(from.name->data_hash()));
+        add_(L"name", {L"country", L"birth"}, from.name, [from](const generation_context& ctx) {
+                 const auto& cca2 = ctx.get<const dasmig::country&>(L"country").cca2;
+                 const auto& b = ctx.get<const dasmig::birth&>(L"birth");
+                 std::string lower = cca2;
+                 std::ranges::transform(lower, lower.begin(), [](char c) {
+                     return static_cast<char>(c >= 'A' && c <= 'Z' ? c - 'A' + 'a' : c);
+                 });
+                 // An unknown code is culture::any, which would draw a
+                 // name from a random culture: reject it instead.
+                 const auto name_culture = ng::to_culture(core::from_utf8(lower));
+                 if (name_culture == culture::any)
+                     throw std::invalid_argument("persona-generator: name-generator has no names for country "
+                                                 + cca2);
+                 auto n = from.name->get_name(
+                     {.gender = b.bio_sex == sex::female ? gender::f : gender::m, .culture = name_culture},
+                     ctx.random()());
+                 n.append_surname();
+                 return core::to_utf8(static_cast<std::wstring>(n));
+             });
 
-        pipeline.add(field(L"traits", [from](const generation_context& ctx) {
-                         return from.trait->get_personality(
-                             {.count = static_cast<std::size_t>(ctx.input<std::int64_t>("traits"))},
-                             ctx.random()());
-                     })
-                         .data_hash(from.trait->data_hash()));
+        add_(L"traits", {}, from.trait, [from](const generation_context& ctx) {
+                 return from.trait->get_personality(
+                     {.count = static_cast<std::size_t>(ctx.input<std::int64_t>("traits"))},
+                     ctx.random()());
+             });
 
-        pipeline.add(field(L"interest", [from](const generation_context& ctx) {
-                         const auto b = ctx.get<dasmig::birth>(L"birth");
-                         interest_request r;
-                         const auto cca2 = ctx.get<dasmig::country>(L"country").cca2;
-                         r.country = cca2;
-                         r.age = static_cast<std::uint8_t>(std::min<unsigned>(b.age, 120));
-                         r.person_sex = b.bio_sex;
-                         return from.interest->get_interest(r, ctx.random()());
-                     })
-                         .depends_on({L"country", L"birth"})
-                         .data_hash(from.interest->data_hash()));
+        add_(L"interest", {L"country", L"birth"}, from.interest, [from](const generation_context& ctx) {
+                 const auto& b = ctx.get<const dasmig::birth&>(L"birth");
+                 interest_request r;
+                 const auto& cca2 = ctx.get<const dasmig::country&>(L"country").cca2;
+                 r.country = cca2;
+                 r.age = static_cast<std::uint8_t>(std::min<unsigned>(b.age, 120));
+                 r.person_sex = b.bio_sex;
+                 return from.interest->get_interest(r, ctx.random()());
+             });
 
-        pipeline.add(field(L"occupation", [from](const generation_context& ctx) {
-                         const auto b = ctx.get<dasmig::birth>(L"birth");
-                         occupation_request r;
-                         const auto cca2 = ctx.get<dasmig::country>(L"country").cca2;
-                         r.country = cca2;
-                         r.age = static_cast<std::uint8_t>(std::min<unsigned>(b.age, 120));
-                         r.person_sex = b.bio_sex;
-                         return from.occupation->get_occupation(r, ctx.random()());
-                     })
-                         .depends_on({L"country", L"birth"})
-                         .data_hash(from.occupation->data_hash()));
+        add_(L"occupation", {L"country", L"birth"}, from.occupation, [from](const generation_context& ctx) {
+                 const auto& b = ctx.get<const dasmig::birth&>(L"birth");
+                 occupation_request r;
+                 const auto& cca2 = ctx.get<const dasmig::country&>(L"country").cca2;
+                 r.country = cca2;
+                 r.age = static_cast<std::uint8_t>(std::min<unsigned>(b.age, 120));
+                 r.person_sex = b.bio_sex;
+                 return from.occupation->get_occupation(r, ctx.random()());
+             });
     }
 };
 
