@@ -72,6 +72,7 @@ The libraries it composes are sibling checkouts (`LIBS=..`, the default), with t
 ```bash
 make            # example
 make test       # tests
+make bench      # benchmarks, results in build/bench.tsv
 make coverage   # code coverage
 make lint       # clang-tidy
 make docs       # API docs
