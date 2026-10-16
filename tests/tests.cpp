@@ -77,6 +77,9 @@ TEST_CASE("an independent set of library instances gives the same persona", "[lo
     REQUIRE(gen.data_hash() == psg::instance().data_hash());
     REQUIRE(gen.get_persona(persona_request{}, seed_a).to_json()
             == psg::instance().get_persona(persona_request{}, seed_a).to_json());
+    const dasmig::psg moved{std::move(gen)};
+    REQUIRE(moved.get_persona(persona_request{}, seed_a).to_json()
+            == psg::instance().get_persona(persona_request{}, seed_a).to_json());
 }
 
 // ---------------------------------------------------------------------------
