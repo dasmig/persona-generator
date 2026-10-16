@@ -260,14 +260,14 @@ TEST_CASE("the age conditions the body and the job", "[pipeline]")
 TEST_CASE("known answers for fixed seeds", "[kat]")
 {
     const auto& gen = psg::instance();
-    REQUIRE(gen.data_hash() == 0x2c51b25a966f8fa8ULL);
+    REQUIRE(gen.data_hash() == 0x12083193eb329143ULL);
 
     const auto one = gen.get_persona(persona_request{}, 1);
-    REQUIRE(one.to_string() == "Brandon White, 13, male, Gosport, United Kingdom, student");
-    REQUIRE(one.signature().to_string() == "0000000000000001-16ccfc2fe06c547b");
+    REQUIRE(one.to_string() == "Jimmy White, 13, male, Gosport, United Kingdom, student");
+    REQUIRE(one.signature().to_string() == "0000000000000001-d29a76dea8889ccb");
     const auto two = gen.get_persona(persona_request{}, 2);
-    REQUIRE(two.to_string() == "Romana Nováková, 16, female, Mashhad, Iran, student");
-    REQUIRE(two.signature().to_string() == "0000000000000002-16ccfc2fe06c547b");
+    REQUIRE(two.to_string() == "Samaneh Sadeghi, 16, female, Mashhad, Iran, student");
+    REQUIRE(two.signature().to_string() == "0000000000000002-d29a76dea8889ccb");
 
     persona_request brazil;
     brazil.country = "BR";
@@ -276,14 +276,14 @@ TEST_CASE("known answers for fixed seeds", "[kat]")
     brazil.traits = 5;
     const auto three = gen.get_persona(brazil, 3);
     REQUIRE(three.to_string() == "Thayna Brandao, 34, female, São Paulo, Brazil, Farm labourer");
-    REQUIRE(three.signature().to_string() == "0000000000000003-a4436f388f2880a1");
+    REQUIRE(three.signature().to_string() == "0000000000000003-00a99a1fc2c48775");
 
     persona_request japan;
     japan.country = "jp";
     japan.reference_date = std::chrono::year_month_day{std::chrono::year{2030}, std::chrono::March, std::chrono::day{9}};
     const auto four = gen.get_persona(japan, 4);
     REQUIRE(four.to_string() == "Toshinori Toyama, 70, male, Edogawe, Japan, Shop assistant");
-    REQUIRE(four.signature().to_string() == "0000000000000004-b617ce3a636b9167");
+    REQUIRE(four.signature().to_string() == "0000000000000004-a458d5cf038b5c6f");
 
     // A hash of 2,000 JSON documents (not 10,000 as in the single-purpose
     // libraries: a persona runs eight of them, and each is covered there).
@@ -296,7 +296,7 @@ TEST_CASE("known answers for fixed seeds", "[kat]")
             h *= 0x100000001b3ULL;
         }
     }
-    REQUIRE(h == 0xb9d64e6d46c6a12cULL);
+    REQUIRE(h == 0x948572c821a722c4ULL);
 }
 
 // ---------------------------------------------------------------------------

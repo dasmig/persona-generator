@@ -28,5 +28,5 @@ A persona's data is the union of these, and its `signature().data` is a hash of 
 ## Known limits
 
 - The `lite` tiers are top-rank slices of the full data, so names in a small culture repeat more.
-- name-generator's `lite` Iranian lists hold Czech given names and surnames (the source's Iranian entries are polluted), so personas from Iran can get Czech names. The persona cannot detect it; the fix belongs in name-generator's data.
+- Names are only as clean as name-generator's data. Before name-generator 4.1.0 its Iranian lists held Czech names and several cultures' lists held initials and fragments (Md, Om, El); 4.1.0 removed them, and persona-generator 1.1.0 requires it. Two-letter tokens outside the Arabic-script cultures and longer abbreviations such as Mohd remain (see name-generator's `doc/data.md`).
 - `admin1` (the state or province name) needs city-generator's admin1 file; it is not part of the replay signature.
