@@ -80,8 +80,13 @@ make bench      # benchmarks, results in build/bench.tsv
 make coverage   # code coverage
 make lint       # clang-tidy
 make docs       # API docs
+make package    # the npm package, built with Emscripten into build/package
 make test LIBS=path/to/the/libraries   # when they are elsewhere
 ```
+
+## JavaScript
+
+[`@dasmig/persona`](https://www.npmjs.com/package/@dasmig/persona) is this library compiled to WebAssembly, with the `lite` data of the libraries it composes built in, for browsers, Web Workers and Node 20+: `npm install @dasmig/persona`. Its source is in [`package/`](package) and the C API it wraps in [`wasm/`](wasm). `make package` (or `python3 scripts/build_package.py`) builds it with Emscripten into `build/package`, and CI tests it in Node and in headless Chrome, benchmarks it and packs it. The package has its own version; the library versions each build contains are in its `versions`.
 
 ## Compiler Support
 
