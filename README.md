@@ -2,6 +2,8 @@
 
 > **Requires C++23** (e.g., `-std=c++23` for GCC/Clang, `/std:c++latest` for MSVC).
 
+[![persona-generator for C++](https://raw.githubusercontent.com/dasmig/persona-generator/main/doc/persona-generator.png)](https://github.com/dasmig/persona-generator/releases)
+
 [![GitHub license](https://img.shields.io/badge/license-MIT-blue.svg)](https://raw.githubusercontent.com/dasmig/persona-generator/main/LICENSE.MIT)
 [![CI](https://github.com/dasmig/persona-generator/actions/workflows/ci.yml/badge.svg)](https://github.com/dasmig/persona-generator/actions/workflows/ci.yml)
 [![GitHub Releases](https://img.shields.io/github/release/dasmig/persona-generator.svg)](https://github.com/dasmig/persona-generator/releases)
