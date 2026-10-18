@@ -70,7 +70,7 @@ A `persona` holds the typed result of every library, so no JSON parsing is neede
 
 `age()` and `person_sex()` read the birth. A persona converts to `std::string` and streams as a one-line summary (`Thayna Brandao, 34, female, São Paulo, Brazil, Farm labourer`). `admin1` is empty unless city-generator has its admin1 names loaded (`load_admin1()`).
 
-`to_json()` writes `name`, `sex`, `age`, `admin1` and `signature`, and each library's result under `country`, `city`, `birth`, `biodata`, `personality`, `interest` and `occupation`, exactly as that library writes it (see its guide for the fields).
+`to_json()` writes `name`, `sex`, `age`, `admin1` and `signature`, and each library's result under `country`, `city`, `birth`, `biodata`, `personality`, `interest` and `occupation`, exactly as that library writes it (so a country is `country_code` in `biodata`, `interest` and `occupation`) (see its guide for the fields).
 
 ## How the draws are conditioned
 
