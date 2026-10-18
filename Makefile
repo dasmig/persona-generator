@@ -22,7 +22,7 @@ BENCH_FLAGS := -O2 -DNDEBUG
 COV_FLAGS := -fprofile-instr-generate -fcoverage-mapping
 COV_DIR   := coverage
 
-.PHONY: all clean lint test bench bench-gate coverage docs
+.PHONY: all clean lint test bench bench-gate coverage docs package
 
 all: $(EXAMPLE_BIN)
 
@@ -70,3 +70,8 @@ lint:
 
 clean:
 	rm -rf $(BUILD) $(COV_DIR) doc/api
+
+# The npm package (package/), built with Emscripten into $(BUILD)/package; see
+# scripts/build_package.py. Test it with node package/test.mjs $(BUILD)/package.
+package:
+	$(PYTHON) scripts/build_package.py --libs $(LIBS) --out $(BUILD)/package
