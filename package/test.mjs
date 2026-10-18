@@ -192,4 +192,4 @@ await assert.rejects(createPersonaPool({ workers: 0 }), RangeError);
 await assert.rejects(createPersonaPool({ workers: 1.5 }), TypeError);
 await assert.rejects(createPersonaPool({ threads: 2 }), TypeError);
 
-console.log('PASS: @dasmig/persona matches persona-generator's known answers (5 personas, 2,000-document hash), replay, requests, errors, batches and worker pools.');
+console.log('PASS: @dasmig/persona matches the persona-generator known answers (5 personas, 2,000-document hash), replay, requests, errors, batches and worker pools.');
