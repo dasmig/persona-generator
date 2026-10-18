@@ -41,7 +41,7 @@ EXPORTED_FUNCTIONS = ["_dasmig_persona_generate", "_dasmig_persona_generate_batc
 
 def git_describe(directory: Path) -> str:
     try:
-        result = subprocess.run(["git", "describe", "--tags", "--always", "--dirty"], cwd=directory,
+        result = subprocess.run(["git", "describe", "--tags", "--match", "v[0-9]*", "--always", "--dirty"], cwd=directory,
                                 capture_output=True, text=True, check=True)
         return result.stdout.strip() or "unknown"
     except (OSError, subprocess.CalledProcessError):
