@@ -36,7 +36,7 @@
 /// @author Diego Dasso Migotto (diegomigotto at hotmail dot com)
 /// @see See doc/usage.md for the narrative tutorial.
 
-DASMIG_CORE_REQUIRE(1, 1);
+DASMIG_CORE_REQUIRE(1, 2);
 
 namespace dasmig
 {
@@ -113,7 +113,7 @@ class persona
     [[nodiscard]] std::string to_string() const
     {
         std::string out = name + ", " + std::to_string(age()) + ", "
-                          + (person_sex() == sex::female ? "female" : "male") + ", "
+                          + std::string{core::sex_name(person_sex())} + ", "
                           + city_info.name + ", " + country_info.name_common;
         const auto text = job.to_string();
         if (!text.empty()) out += ", " + text;
@@ -130,7 +130,7 @@ class persona
     {
         w.begin_object()
             .field("name", name)
-            .field("sex", person_sex() == sex::female ? "female" : "male")
+            .field("sex", core::sex_name(person_sex()))
             .field("age", age())
             .field("admin1", admin1);
         w.key("country");
@@ -329,7 +329,7 @@ class psg
             er.inputs["country"] = country_code;
         }
         if (request.person_sex)
-            er.inputs["sex"] = std::string{*request.person_sex == sex::female ? "female" : "male"};
+            er.inputs["sex"] = std::string{core::sex_name(*request.person_sex)};
         if (request.ages)
         {
             er.inputs["age_min"] = static_cast<std::int64_t>(request.ages->min);
@@ -489,7 +489,7 @@ class psg
     [[nodiscard]] static std::optional<sex> sex_input_(const generation_context& ctx)
     {
         if (!ctx.has_input("sex")) return std::nullopt;
-        return ctx.input<std::string>("sex") == "female" ? sex::female : sex::male;
+        return core::parse_sex(ctx.input<std::string>("sex")).value_or(sex::male);
     }
 
     /// The fields of the pipeline, in the order they depend on each other.
