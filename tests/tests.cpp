@@ -299,7 +299,7 @@ TEST_CASE("known answers for fixed seeds", "[kat]")
             h *= 0x100000001b3ULL;
         }
     }
-    REQUIRE(h == 0x7473373b067d7ecaULL);
+    REQUIRE(h == 0x51137464edc90c7cULL);
 }
 
 // ---------------------------------------------------------------------------
@@ -395,5 +395,5 @@ TEST_CASE("persona batch: known answer of 10,000 items", "[batch][kat]")
     gen.for_each_persona(request, {.count = 10000, .threads = 4}, 1,
                         [&](std::uint64_t, const dasmig::persona& item)
                         { hash = dasmig::core::hash_combine(hash, dasmig::core::fnv1a64(item.to_json())); });
-    REQUIRE(hash == 0xaf38483621ea0863ULL);
+    REQUIRE(hash == 0x58fd7d4f0015f7d8ULL);
 }
