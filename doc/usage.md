@@ -13,6 +13,7 @@ persona-generator draws a complete character in one call by running the other da
 <li><a href="#seeds-and-replay">Seeds and replay</a></li>
 <li><a href="#data">Data</a></li>
 <li><a href="#supported-countries">Supported countries</a></li>
+<li><a href="#migrating-to-v3">Migrating to v3</a></li>
 <li><a href="#errors">Errors</a></li>
 </ul>
 
@@ -152,6 +153,10 @@ gen.for_each_persona(request, {.count = 1'000'000, .threads = 0}, 42, lines);
 - **Uniqueness.** `.unique = core::unique_rule::by<persona>(key)` regenerates an item whose key already appeared in the batch, with a deterministic retry seed, and throws `std::runtime_error` naming the item when the attempts run out.
 - **Sinks.** `core::jsonl_writer` writes one `to_json()` per line, `core::csv_writer` flattens each result's JSON into dotted columns. Any callable `(std::uint64_t index, persona&)` works.
 - Batch calls use the same const getters from several threads, which the thread-safety rules above allow; the CI runs the batch tests under ThreadSanitizer.
+
+## Migrating to v3
+
+Version 3 composes biodata-generator 5, which draws skin, hair and eyes together (light hair goes with light eyes and fair skin, dark with dark), so the same seed gives a different skin, hair and eye colour than in v2. Everything else is unchanged: the data hash, the country, sex, age, names, jobs and traits for a seed, and the API. The libraries are now name-generator 4.2.2, city-generator 4.2.0, entity-generator 4.2.0, birth-generator and country-generator 3.1.2, interest-generator and occupation-generator 3.0.1, trait-generator 2.1.2 and biodata-generator 5.0.0. Update known answers that include the body.
 
 ## Errors
 
