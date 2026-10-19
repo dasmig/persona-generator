@@ -266,10 +266,10 @@ TEST_CASE("known answers for fixed seeds", "[kat]")
     REQUIRE(gen.data_hash() == 0x12083193eb329143ULL);
 
     const auto one = gen.get_persona(persona_request{}, 1);
-    REQUIRE(one.to_string() == "Jimmy White, 13, male, Gosport, United Kingdom, student");
+    REQUIRE(one.to_string() == "Nigel Phillips, 13, male, Gosport, United Kingdom, student");
     REQUIRE(one.signature().to_string() == "0000000000000001-d29a76dea8889ccb");
     const auto two = gen.get_persona(persona_request{}, 2);
-    REQUIRE(two.to_string() == "Samaneh Sadeghi, 16, female, Mashhad, Iran, student");
+    REQUIRE(two.to_string() == "Sadaf Esmaeili, 16, female, Mashhad, Iran, student");
     REQUIRE(two.signature().to_string() == "0000000000000002-d29a76dea8889ccb");
 
     persona_request brazil;
@@ -278,14 +278,14 @@ TEST_CASE("known answers for fixed seeds", "[kat]")
     brazil.ages = dasmig::age_range{.min = 25, .max = 35};
     brazil.traits = 5;
     const auto three = gen.get_persona(brazil, 3);
-    REQUIRE(three.to_string() == "Thayna Brandao, 34, female, São Paulo, Brazil, Farm labourer");
+    REQUIRE(three.to_string() == "Jéssica Tomaz Cardozo, 34, female, São Paulo, Brazil, Farm labourer");
     REQUIRE(three.signature().to_string() == "0000000000000003-00a99a1fc2c48775");
 
     persona_request japan;
     japan.country = "jp";
     japan.reference_date = std::chrono::year_month_day{std::chrono::year{2030}, std::chrono::March, std::chrono::day{9}};
     const auto four = gen.get_persona(japan, 4);
-    REQUIRE(four.to_string() == "Toshinori Toyama, 70, male, Edogawe, Japan, Shop assistant");
+    REQUIRE(four.to_string() == "Iwasaki Yasushi, 70, male, Edogawe, Japan, Shop assistant");
     REQUIRE(four.signature().to_string() == "0000000000000004-a458d5cf038b5c6f");
 
     // A hash of 2,000 JSON documents (not 10,000 as in the single-purpose
@@ -299,7 +299,7 @@ TEST_CASE("known answers for fixed seeds", "[kat]")
             h *= 0x100000001b3ULL;
         }
     }
-    REQUIRE(h == 0x51137464edc90c7cULL);
+    REQUIRE(h == 0x9b965a26df7f7238ULL);
 }
 
 // ---------------------------------------------------------------------------
@@ -395,5 +395,5 @@ TEST_CASE("persona batch: known answer of 10,000 items", "[batch][kat]")
     gen.for_each_persona(request, {.count = 10000, .threads = 4}, 1,
                         [&](std::uint64_t, const dasmig::persona& item)
                         { hash = dasmig::core::hash_combine(hash, dasmig::core::fnv1a64(item.to_json())); });
-    REQUIRE(hash == 0x58fd7d4f0015f7d8ULL);
+    REQUIRE(hash == 0x78805ecdd844e9fcULL);
 }

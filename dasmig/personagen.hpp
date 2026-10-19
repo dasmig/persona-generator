@@ -549,10 +549,9 @@ class psg
                  if (name_culture == culture::any)
                      throw std::invalid_argument("persona-generator: name-generator has no names for country "
                                                  + cca2);
-                 auto n = from.name->get_name(
+                 const auto n = from.name->get_full_name(
                      {.gender = b.bio_sex == sex::female ? gender::f : gender::m, .culture = name_culture},
                      ctx.random()());
-                 n.append_surname();
                  return core::to_utf8(static_cast<std::wstring>(n));
              });
 

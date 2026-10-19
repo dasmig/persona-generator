@@ -7,6 +7,7 @@ import assert from 'node:assert/strict';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
+
 const dir = path.resolve(process.argv[2] || 'build/package');
 const { createPersonaGenerator, createPersonaPool } = await import(pathToFileURL(path.join(dir, 'node.mjs')).href);
 const personas = await createPersonaGenerator();
@@ -26,17 +27,17 @@ assert.ok(Object.isFrozen(personas) && Object.isFrozen(personas.countries));
 
 // Known answers.
 const one = personas.generate({ seed: 1 });
-assert.equal(summary(one), 'Jimmy White, 13, male, Gosport, United Kingdom, student');
+assert.equal(summary(one), 'Nigel Phillips, 13, male, Gosport, United Kingdom, student');
 assert.equal(signature(one), '0000000000000001-d29a76dea8889ccb');
 const two = personas.generate({ seed: '2' });
-assert.equal(summary(two), 'Samaneh Sadeghi, 16, female, Mashhad, Iran, student');
+assert.equal(summary(two), 'Sadaf Esmaeili, 16, female, Mashhad, Iran, student');
 assert.equal(signature(two), '0000000000000002-d29a76dea8889ccb');
 const three = personas.generate({ country: 'BR', sex: 'female', ages: { min: 25, max: 35 }, traits: 5, seed: 3n });
-assert.equal(summary(three), 'Thayna Brandao, 34, female, São Paulo, Brazil, Farm labourer');
+assert.equal(summary(three), 'Jéssica Tomaz Cardozo, 34, female, São Paulo, Brazil, Farm labourer');
 assert.equal(signature(three), '0000000000000003-00a99a1fc2c48775');
 assert.equal(three.personality.traits.length, 5);
 const four = personas.generate({ country: 'jp', referenceDate: '2030-03-09', seed: 4 });
-assert.equal(summary(four), 'Toshinori Toyama, 70, male, Edogawe, Japan, Shop assistant');
+assert.equal(summary(four), 'Iwasaki Yasushi, 70, male, Edogawe, Japan, Shop assistant');
 assert.equal(signature(four), '0000000000000004-a458d5cf038b5c6f');
 
 // The hash of 2,000 JSON documents. The native test runs without admin1
@@ -48,7 +49,7 @@ for (let s = 0; s < 2000; ++s) {
   const json = personas.generateJson({ seed: s }).replace(/"admin1":"(?:[^"\\]|\\.)*"/, '"admin1":""');
   for (const byte of encoder.encode(json)) hash = ((hash ^ BigInt(byte)) * 0x100000001b3n) & mask;
 }
-assert.equal(hash.toString(16), '51137464edc90c7c');
+assert.equal(hash.toString(16), '9b965a26df7f7238');
 
 // Admin1 names are embedded.
 assert.equal(personas.generate({ country: 'BR', seed: 1 }).admin1.length > 0, true);
