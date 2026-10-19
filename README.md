@@ -69,6 +69,10 @@ auto again = gen.get_persona(request, q.seed());
 
 See the [usage guide](doc/usage.md) for everything else.
 
+## JavaScript
+
+[`@dasmig/persona`](https://www.npmjs.com/package/@dasmig/persona) is this library compiled to WebAssembly, with the `lite` data of the libraries it composes built in, for browsers, Web Workers and Node 20+: `npm install @dasmig/persona`. Its source is in [`package/`](package) and the C API it wraps in [`wasm/`](wasm). `make package` (or `python3 scripts/build_package.py`) builds it with Emscripten into `build/package`, and CI tests it in Node and in headless Chrome, benchmarks it and packs it. The package has its own version; the library versions each build contains are in its `versions`.
+
 ## Building
 
 The libraries it composes are sibling checkouts (`LIBS=..`, the default), with their `lite` data compiled in.
@@ -83,10 +87,6 @@ make docs       # API docs
 make package    # the npm package, built with Emscripten into build/package
 make test LIBS=path/to/the/libraries   # when they are elsewhere
 ```
-
-## JavaScript
-
-[`@dasmig/persona`](https://www.npmjs.com/package/@dasmig/persona) is this library compiled to WebAssembly, with the `lite` data of the libraries it composes built in, for browsers, Web Workers and Node 20+: `npm install @dasmig/persona`. Its source is in [`package/`](package) and the C API it wraps in [`wasm/`](wasm). `make package` (or `python3 scripts/build_package.py`) builds it with Emscripten into `build/package`, and CI tests it in Node and in headless Chrome, benchmarks it and packs it. The package has its own version; the library versions each build contains are in its `versions`.
 
 ## Compiler Support
 
@@ -121,6 +121,7 @@ Tested with:
 | [occupation-generator](https://github.com/dasmig/occupation-generator) | Employment status, education and occupation by country, age and sex |
 | [phone-generator](https://github.com/dasmig/phone-generator) | Phone numbers valid in each country's numbering plan |
 | [trait-generator](https://github.com/dasmig/trait-generator) | Personality traits with conflicts, synergies and Big Five axes |
+| [user-generator](https://github.com/dasmig/user-generator) | Complete user records: account, username, email, phone and address |
 
 ## License
 
