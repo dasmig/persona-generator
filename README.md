@@ -25,7 +25,7 @@ Jéssica Tomaz Cardozo, 34, female, São Paulo, Brazil, Farm labourer
 
 - **Batch Generation**. Generate thousands of results from one seed, on several threads with the same output for any thread count, optionally unique by a key, and stream them as JSON Lines or CSV (see the usage guide).
 
-- **Ask for What You Need**. A `persona_request` can fix the country, the sex, an age range, the reference date and the number of traits. What is left out is drawn.
+- **Ask for What You Need**. A `persona_request` can fix the country, the sex, an age range, the reference date and the number of traits. What is left out is drawn. Set `relations` to also get the persona's family (parents, siblings, partners, children), drawn by [relationship-generator](https://github.com/dasmig/relationship-generator); it is off by default and changes nothing else.
 
 - **Deterministic Seeding**. `get_persona(request, seed)` is a pure function of the request, the seed and the data, and `persona::seed()` replays a previous persona. Each library draws from its own stream split from the seed, so forcing one choice does not shift the others.
 
@@ -37,7 +37,7 @@ Jéssica Tomaz Cardozo, 34, female, São Paulo, Brazil, Farm labourer
 
 ## Integration
 
-[`personagen.hpp`](https://github.com/dasmig/persona-generator/blob/main/dasmig/personagen.hpp) is the library [released here](https://github.com/dasmig/persona-generator/releases). It composes these libraries, which must be on the include path (with `dasmig-core` in each): [biodata](https://github.com/dasmig/biodata-generator), [birth](https://github.com/dasmig/birth-generator), [city](https://github.com/dasmig/city-generator), [country](https://github.com/dasmig/country-generator), [entity](https://github.com/dasmig/entity-generator), [interest](https://github.com/dasmig/interest-generator), [name](https://github.com/dasmig/name-generator), [occupation](https://github.com/dasmig/occupation-generator) and [trait](https://github.com/dasmig/trait-generator). The release notes list the versions it was tested with. Add
+[`personagen.hpp`](https://github.com/dasmig/persona-generator/blob/main/dasmig/personagen.hpp) is the library [released here](https://github.com/dasmig/persona-generator/releases). It composes these libraries, which must be on the include path (with `dasmig-core` in each): [biodata](https://github.com/dasmig/biodata-generator), [birth](https://github.com/dasmig/birth-generator), [city](https://github.com/dasmig/city-generator), [country](https://github.com/dasmig/country-generator), [entity](https://github.com/dasmig/entity-generator), [interest](https://github.com/dasmig/interest-generator), [name](https://github.com/dasmig/name-generator), [occupation](https://github.com/dasmig/occupation-generator), [relationship](https://github.com/dasmig/relationship-generator) and [trait](https://github.com/dasmig/trait-generator). The release notes list the versions it was tested with. Add
 
 ```cpp
 #include <dasmig/personagen.hpp>
@@ -120,6 +120,7 @@ Tested with:
 | [nickname-generator](https://github.com/dasmig/nickname-generator) | Gamer-style nicknames |
 | [occupation-generator](https://github.com/dasmig/occupation-generator) | Employment status, education and occupation by country, age and sex |
 | [phone-generator](https://github.com/dasmig/phone-generator) | Phone numbers valid in each country's numbering plan |
+| [relationship-generator](https://github.com/dasmig/relationship-generator) | Families around a person: parents, siblings, partners and children |
 | [trait-generator](https://github.com/dasmig/trait-generator) | Personality traits with conflicts, synergies and Big Five axes |
 | [user-generator](https://github.com/dasmig/user-generator) | Complete user records: account, username, email, phone and address |
 

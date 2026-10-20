@@ -29,6 +29,7 @@
 #include <dasmig/interestgen.hpp>
 #include <dasmig/namegen.hpp>
 #include <dasmig/occupationgen.hpp>
+#include <dasmig/relgen.hpp>
 #include <dasmig/traitgen.hpp>
 
 /// @file personagen.hpp
@@ -67,6 +68,17 @@ struct persona_request
 
     /// @brief How many personality traits to draw.
     std::size_t traits{3};
+
+    /// @brief Also draw the people around the persona: parents, siblings,
+    ///        partners and children (relationship-generator). Unset by
+    ///        default, and then nothing about the persona changes.
+    ///
+    /// The `anchor` of this request is replaced by the persona (its country,
+    /// sex, birth date and name) and its `reference_date` by this request's;
+    /// the rest (`up`, `down`, `siblings`, `partners`, `names`, `name_culture`)
+    /// is used as given. The family is drawn from its own seed, split from the
+    /// persona's, so the rest of the persona is the same with and without it.
+    std::optional<family_request> relations{}; // NOLINT(readability-redundant-member-init)
 };
 
 /// @brief Return type for persona generation.
@@ -86,6 +98,7 @@ class persona
     dasmig::personality traits;     ///< Personality traits and axes.
     dasmig::interest interests;     ///< Religion, hobbies and media.
     dasmig::occupation job;         ///< Employment status, education and job.
+    std::optional<family> relatives{}; ///< The persona's family; set only when `persona_request::relations` was. // NOLINT(readability-redundant-member-init)
 
     /// @brief Retrieve the random seed used to generate this persona.
     /// @return The call seed; pass it to get_persona(request, seed) with
@@ -124,7 +137,8 @@ class persona
     ///
     /// Each library's result is written as that library writes it
     /// (`country`, `city`, `birth`, `biodata`, `personality`, `interest`,
-    /// `occupation`), next to `name`, `sex`, `age`, `admin1` and `signature`.
+    /// `occupation`), next to `name`, `sex`, `age`, `admin1` and `signature`,
+    /// and `relatives` (the family) when the request asked for it.
     /// @param w Writer positioned where a value is allowed.
     void to_json(core::json_writer& w) const
     {
@@ -147,6 +161,11 @@ class persona
         interests.to_json(w);
         w.key("occupation");
         job.to_json(w);
+        if (relatives)
+        {
+            w.key("relatives");
+            relatives->to_json(w);
+        }
         w.key("signature");
         _signature.to_json(w);
         w.end_object();
@@ -216,6 +235,7 @@ class psg
         intg* interest{&intg::instance()};   ///< Religion, hobbies and media.
         ocg* occupation{&ocg::instance()};   ///< Employment, education and jobs.
         trtg* trait{&trtg::instance()};      ///< Personality.
+        relg* relationship{&relg::instance()}; ///< Family; used only when a request asks for relations.
     };
 
     /// @brief Draws from the singletons of the eight libraries.
@@ -276,6 +296,9 @@ class psg
         ok = _from.interest->load(tier) && ok;
         ok = _from.occupation->load(tier) && ok;
         ok = _from.trait->load(tier) && ok;
+        // Only a request for relations needs this one, so a missing tier of it
+        // does not fail the load.
+        static_cast<void>(_from.relationship->load(tier));
         return ok;
     }
 
@@ -341,6 +364,9 @@ class psg
             + static_cast<std::int64_t>(static_cast<unsigned>(request.reference_date.day()));
         er.inputs["traits"] = static_cast<std::int64_t>(request.traits);
 
+        if (request.relations && !_from.relationship->has_family_data())
+            throw std::runtime_error("persona-generator: relationship-generator has no data loaded");
+
         const auto e = _pipeline.generate(er, call_seed);
 
         persona p;
@@ -348,13 +374,27 @@ class psg
         p.city_info = e.get<dasmig::city>(L"city");
         p.birthday = e.get<dasmig::birth>(L"birth");
         p.body = e.get<dasmig::biodata>(L"biodata");
-        p.name = e.get<std::string>(L"name");
+        const auto& named = e.get<named_>(L"name");
+        p.name = named.full;
         p.traits = e.get<dasmig::personality>(L"traits");
         p.interests = e.get<dasmig::interest>(L"interest");
         p.job = e.get<dasmig::occupation>(L"occupation");
         if (_from.city->has_admin1())
             p.admin1 = _from.city->resolve_admin1(p.city_info.country_code, p.city_info.admin1_code);
         p._signature = e.signature();
+        if (request.relations)
+        {
+            auto family = *request.relations;
+            family.anchor = anchor_spec{.country_code = p.country_info.cca2,
+                                        .bio_sex = p.birthday.bio_sex,
+                                        .birth = std::chrono::year_month_day{
+                                            std::chrono::year{p.birthday.year},
+                                            std::chrono::month{p.birthday.month},
+                                            std::chrono::day{p.birthday.day}},
+                                        .name = named.parts};
+            family.reference_date = request.reference_date;
+            p.relatives = _from.relationship->get_family(family, core::rng{call_seed}.split("relations").seed());
+        }
         return p;
     }
 
@@ -443,6 +483,14 @@ class psg
         "PL", "PT", "RS", "RU", "SA", "SD", "SE", "SG", "SI", "SV", "SY", "TN", "TR", "US", "YE", "ZA"};
 
     static constexpr int max_country_attempts_ = 10000;
+
+    // The name step's value: the full name the persona shows, and its parts,
+    // which the family of a persona is named to match.
+    struct named_
+    {
+        std::string full;
+        person_name parts;
+    };
 
     sources _from{};
     core::rng _engine{core::rng::from_entropy()};
@@ -552,7 +600,10 @@ class psg
                  const auto n = from.name->get_full_name(
                      {.gender = b.bio_sex == sex::female ? gender::f : gender::m, .culture = name_culture},
                      ctx.random()());
-                 return core::to_utf8(static_cast<std::wstring>(n));
+                 return named_{core::to_utf8(static_cast<std::wstring>(n)),
+                               person_name{.given = core::to_utf8(n.given()),
+                                           .patronymic = core::to_utf8(n.patronymic()),
+                                           .family = core::to_utf8(n.family())}};
              });
 
         add_(L"traits", {}, from.trait, [from](const generation_context& ctx) {
