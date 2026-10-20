@@ -12,8 +12,8 @@ permissions:
 # .github/actions/checkout-libs) with their lite data compiled in.
 env:
   LIBS: libs
-  LIB_FLAGS: -Ilibs/biodata-generator -Ilibs/birth-generator -Ilibs/city-generator -Ilibs/country-generator -Ilibs/entity-generator -Ilibs/interest-generator -Ilibs/name-generator -Ilibs/occupation-generator -Ilibs/trait-generator -DDASMIG_COUNTRY_EMBED -DDASMIG_CITY_EMBED -DDASMIG_BIRTH_EMBED -DDASMIG_BIODATA_EMBED -DDASMIG_NAME_EMBED -DDASMIG_INTEREST_EMBED -DDASMIG_OCCUPATION_EMBED -DDASMIG_TRAIT_EMBED
-  MSVC_LIB_FLAGS: /Ilibs\biodata-generator /Ilibs\birth-generator /Ilibs\city-generator /Ilibs\country-generator /Ilibs\entity-generator /Ilibs\interest-generator /Ilibs\name-generator /Ilibs\occupation-generator /Ilibs\trait-generator /DDASMIG_COUNTRY_EMBED /DDASMIG_CITY_EMBED /DDASMIG_BIRTH_EMBED /DDASMIG_BIODATA_EMBED /DDASMIG_NAME_EMBED /DDASMIG_INTEREST_EMBED /DDASMIG_OCCUPATION_EMBED /DDASMIG_TRAIT_EMBED
+  LIB_FLAGS: -Ilibs/biodata-generator -Ilibs/birth-generator -Ilibs/city-generator -Ilibs/country-generator -Ilibs/entity-generator -Ilibs/interest-generator -Ilibs/name-generator -Ilibs/occupation-generator -Ilibs/relationship-generator -Ilibs/trait-generator -DDASMIG_COUNTRY_EMBED -DDASMIG_CITY_EMBED -DDASMIG_BIRTH_EMBED -DDASMIG_BIODATA_EMBED -DDASMIG_NAME_EMBED -DDASMIG_INTEREST_EMBED -DDASMIG_OCCUPATION_EMBED -DDASMIG_RELATIONSHIP_EMBED -DDASMIG_TRAIT_EMBED
+  MSVC_LIB_FLAGS: /Ilibs\biodata-generator /Ilibs\birth-generator /Ilibs\city-generator /Ilibs\country-generator /Ilibs\entity-generator /Ilibs\interest-generator /Ilibs\name-generator /Ilibs\occupation-generator /Ilibs\relationship-generator /Ilibs\trait-generator /DDASMIG_COUNTRY_EMBED /DDASMIG_CITY_EMBED /DDASMIG_BIRTH_EMBED /DDASMIG_BIODATA_EMBED /DDASMIG_NAME_EMBED /DDASMIG_INTEREST_EMBED /DDASMIG_OCCUPATION_EMBED /DDASMIG_RELATIONSHIP_EMBED /DDASMIG_TRAIT_EMBED
 
 jobs:
   build-and-test:

@@ -28,8 +28,10 @@ ROOT = Path(__file__).resolve().parent.parent
 
 # Libraries with data compiled into the module.
 DATA_LIBRARIES = ["country", "city", "birth", "biodata", "name", "interest", "occupation", "trait"]
+# Header-only libraries compiled in without data: the module does not ask for relations yet.
+CODE_LIBRARIES = ["entity", "relationship"]
 # Every library the module is built from, for versions.mjs (persona itself first).
-VERSION_LIBRARIES = ["persona", "entity"] + DATA_LIBRARIES
+VERSION_LIBRARIES = ["persona"] + CODE_LIBRARIES + DATA_LIBRARIES
 
 PACKAGE_FILES = [
     "package.json", "index.mjs", "node.mjs", "generator.mjs", "batch.mjs", "pool.mjs",
@@ -77,7 +79,7 @@ def main() -> int:
         args.em, "-std=c++23", "-O3", "-DNDEBUG", "-fwasm-exceptions",
         "-I", str(ROOT / "wasm"), "-I", str(ROOT),
     ]
-    command += ["-I" + str(lib_dir[name]) for name in ["entity"] + DATA_LIBRARIES]
+    command += ["-I" + str(lib_dir[name]) for name in CODE_LIBRARIES + DATA_LIBRARIES]
     command += [f"-DDASMIG_{name.upper()}_EMBED" for name in DATA_LIBRARIES]
     command += [
         str(ROOT / "wasm" / "persona_api.cpp"), "-o", str(out / "persona.mjs"),

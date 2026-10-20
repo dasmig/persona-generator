@@ -397,3 +397,84 @@ TEST_CASE("persona batch: known answer of 10,000 items", "[batch][kat]")
                         { hash = dasmig::core::hash_combine(hash, dasmig::core::fnv1a64(item.to_json())); });
     REQUIRE(hash == 0x78805ecdd844e9fcULL);
 }
+
+// ---------------------------------------------------------------------------
+// Relations
+// ---------------------------------------------------------------------------
+
+TEST_CASE("relations are off by default and then change nothing", "[relations]")
+{
+    const auto& gen = psg::instance();
+    const auto plain = gen.get_persona(request_for("BR"), seed_a);
+    REQUIRE_FALSE(plain.relatives.has_value());
+    REQUIRE(plain.to_json().find("\"relatives\"") == std::string::npos);
+}
+
+TEST_CASE("relations add the family of the persona and nothing else", "[relations]")
+{
+    const auto& gen = psg::instance();
+    std::uint64_t seed = 1;
+    for (const auto* country : {"BR", "ES", "JP", "US", "RU", "IS"})
+    {
+        CAPTURE(country);
+        auto request = request_for(country);
+        const auto plain = gen.get_persona(request, seed);
+        request.relations = dasmig::family_request{};
+        const auto with = gen.get_persona(request, seed);
+
+        // Every other part, and the signature, are the same.
+        REQUIRE(with.name == plain.name);
+        REQUIRE(with.age() == plain.age());
+        REQUIRE(with.city_info.name == plain.city_info.name);
+        REQUIRE(with.job.to_json() == plain.job.to_json());
+        REQUIRE(with.signature().seed == plain.signature().seed);
+        REQUIRE(with.signature().data == plain.signature().data);
+
+        REQUIRE(with.relatives.has_value());
+        const auto& anchor = with.relatives->anchor();
+        REQUIRE(with.relatives->country_code == country);
+        REQUIRE(anchor.bio_sex == with.person_sex());
+        REQUIRE(anchor.age == with.age());
+        REQUIRE(anchor.name == with.name);
+        REQUIRE(static_cast<int>(anchor.birth.year()) == with.birthday.year);
+        REQUIRE(with.to_json().find("\"relatives\":{") != std::string::npos);
+        ++seed;
+    }
+}
+
+TEST_CASE("relations follow the request and replay from the seed", "[relations]")
+{
+    const auto& gen = psg::instance();
+    auto request = request_for("PT");
+    request.relations = dasmig::family_request{.up = 0, .down = 0, .partners = false};
+    const auto a = gen.get_persona(request, seed_a);
+    REQUIRE(a.relatives->members.size() == 1);
+    REQUIRE(gen.get_persona(request, seed_a).to_json() == a.to_json());
+
+    request.relations = dasmig::family_request{.up = 1, .down = 0};
+    const auto b = gen.get_persona(request, seed_a);
+    REQUIRE(b.relatives->parents().size() == 2);
+}
+
+TEST_CASE("relations: a persona batch with them is the same for any thread count", "[relations][batch]")
+{
+    const auto& gen = psg::instance();
+    auto request = persona_request{};
+    request.relations = dasmig::family_request{};
+    const auto one = gen.get_persona_batch(request, {.count = 200, .threads = 1}, 7);
+    const auto many = gen.get_persona_batch(request, {.count = 200, .threads = 4}, 7);
+    REQUIRE(one.size() == many.size());
+    for (std::size_t i = 0; i < one.size(); ++i) REQUIRE(one[i].to_json() == many[i].to_json());
+}
+
+TEST_CASE("relations: known answer of 1,000 items", "[relations][kat]")
+{
+    const auto& gen = psg::instance();
+    auto request = persona_request{};
+    request.relations = dasmig::family_request{};
+    std::uint64_t hash = 0xcbf29ce484222325ULL;
+    gen.for_each_persona(request, {.count = 1000, .threads = 4}, 1,
+                         [&](std::uint64_t, const dasmig::persona& item)
+                         { hash = dasmig::core::hash_combine(hash, dasmig::core::fnv1a64(item.to_json())); });
+    REQUIRE(hash == 0xdea1b993d5948d6bULL);
+}

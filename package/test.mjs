@@ -22,7 +22,7 @@ assert.ok(!personas.countries.includes('KR'));
 assert.equal(personas.dataHash, '12083193eb329143');
 assert.equal(personas.maxTraits, 52);
 assert.equal(personas.versions['persona-generator'].startsWith('v'), true, JSON.stringify(personas.versions));
-assert.equal(Object.keys(personas.versions).length, 10);
+assert.equal(Object.keys(personas.versions).length, 11);
 assert.ok(Object.isFrozen(personas) && Object.isFrozen(personas.countries));
 
 // Known answers.
