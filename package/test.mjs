@@ -40,6 +40,24 @@ const four = personas.generate({ country: 'jp', referenceDate: '2030-03-09', see
 assert.equal(summary(four), 'Iwasaki Yasushi, 70, male, Edogawe, Japan, Shop assistant');
 assert.equal(signature(four), '0000000000000004-a458d5cf038b5c6f');
 
+// Relations add the family and change nothing else.
+const plain = personas.generate({ country: 'BR', seed: 7 });
+assert.equal(plain.relatives, undefined);
+const withFamily = personas.generate({ country: 'BR', seed: 7, relations: true });
+const { relatives, ...rest } = withFamily;
+assert.deepEqual(rest, plain);
+assert.equal(relatives.members[0].role, 'anchor');
+assert.equal(relatives.members[0].birth, plain.birth.date);
+assert.equal(relatives.country, 'BR');
+assert.ok(relatives.members.some(m => m.role === 'mother') && relatives.members.some(m => m.role === 'father'));
+assert.deepEqual(personas.generate({ country: 'BR', seed: 7, relations: {} }), withFamily);
+const grand = personas.generate({ country: 'BR', seed: 7, relations: { up: 2, down: 0, partners: false, names: false } });
+assert.ok(grand.relatives.members.some(m => m.role === 'paternal_grandfather'));
+assert.ok(grand.relatives.members.every(m => m.name === undefined && m.role !== 'partner' && m.role !== 'child'));
+assert.throws(() => personas.generate({ relations: { up: 3 } }), RangeError);
+assert.throws(() => personas.generate({ relations: { depth: 1 } }), TypeError);
+assert.equal(personas.generateBatch({ request: { country: 'BR', relations: true }, count: 3, seed: 5 })[2].relatives.members[0].role, 'anchor');
+
 // The hash of 2,000 JSON documents. The native test runs without admin1
 // names, which this module embeds, so they are blanked before hashing.
 let hash = 0xcbf29ce484222325n;

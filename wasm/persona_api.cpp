@@ -10,6 +10,7 @@
 #include <emscripten/emscripten.h>
 #include "support.hpp"
 
+#include <charconv>
 #include <cmath>
 #include <exception>
 #include <string>
@@ -42,9 +43,11 @@ std::string hex(std::uint64_t value)
 }
 
 // The request the C API's string and number arguments describe; "" and -1
-// leave a choice to the generator.
+// leave a choice to the generator. `relations` is the family: "" for none,
+// otherwise "up,down,flags" with the generations above and below (0 to 2) and
+// the flags 1 siblings, 2 partners, 4 names.
 dasmig::persona_request make_request(const char* country, const char* sex, int age_min, int age_max, int traits,
-                                     const char* reference_date)
+                                     const char* reference_date, const char* relations)
 {
     dasmig::persona_request request;
     if (*country != '\0') request.country = country;
@@ -61,6 +64,29 @@ dasmig::persona_request make_request(const char* country, const char* sex, int a
     }
     if (traits >= 0) request.traits = static_cast<std::size_t>(traits);
     if (*reference_date != '\0') request.reference_date = parse_reference_date(reference_date);
+    if (*relations != '\0')
+    {
+        int values[3]{};
+        const std::string_view text{relations};
+        const char* at = text.data();
+        const char* const end = at + text.size();
+        for (int i = 0; i < 3; ++i)
+        {
+            const auto result = std::from_chars(at, end, values[i]);
+            if (result.ec != std::errc{} || (i < 2 ? result.ptr == end || *result.ptr != ',' : result.ptr != end))
+                throw std::invalid_argument("relations must be \"up,down,flags\"");
+            at = result.ptr + 1;
+        }
+        if (values[0] < 0 || values[0] > 2 || values[1] < 0 || values[1] > 2 || values[2] < 0 || values[2] > 7)
+            throw std::invalid_argument("relations: up and down are 0 to 2, flags 0 to 7");
+        dasmig::family_request family;
+        family.up = values[0];
+        family.down = values[1];
+        family.siblings = (values[2] & 1) != 0;
+        family.partners = (values[2] & 2) != 0;
+        family.names = (values[2] & 4) != 0;
+        request.relations = family;
+    }
     return request;
 }
 
@@ -78,16 +104,17 @@ extern "C"
 /// @param traits Number of personality traits, or -1 for the default (3).
 /// @param reference_date The date ages are computed at, YYYY-MM-DD, or "" for
 ///        birth-generator's default (2023-07-01). Never the clock.
+/// @param relations "" for no family, or "up,down,flags" (see make_request).
 /// @param seed 1 to 16 hexadecimal digits, or "" for a random seed (the
 ///        persona's signature has the seed that replays it).
 EMSCRIPTEN_KEEPALIVE const char* dasmig_persona_generate(const char* country, const char* sex, int age_min,
                                                          int age_max, int traits, const char* reference_date,
-                                                         const char* seed)
+                                                         const char* relations, const char* seed)
 {
     try
     {
         load_once();
-        const auto request = make_request(country, sex, age_min, age_max, traits, reference_date);
+        const auto request = make_request(country, sex, age_min, age_max, traits, reference_date, relations);
 
         auto& generator = dasmig::psg::instance();
         return reply(*seed == '\0' ? generator.get_persona(request).to_json()
@@ -108,13 +135,14 @@ EMSCRIPTEN_KEEPALIVE const char* dasmig_persona_generate(const char* country, co
 /// @param count Number of personas (0 or more).
 EMSCRIPTEN_KEEPALIVE const char* dasmig_persona_generate_batch(const char* country, const char* sex, int age_min,
                                                                int age_max, int traits,
-                                                               const char* reference_date, const char* seed,
+                                                               const char* reference_date, const char* relations,
+                                                               const char* seed,
                                                                double first, int count)
 {
     try
     {
         load_once();
-        const auto request = make_request(country, sex, age_min, age_max, traits, reference_date);
+        const auto request = make_request(country, sex, age_min, age_max, traits, reference_date, relations);
         if (*seed == '\0') throw std::invalid_argument("a batch needs a seed");
         if (count < 0) throw std::invalid_argument("count must not be negative");
         if (!(first >= 0.0 && first <= 9007199254740991.0) || first != std::floor(first))

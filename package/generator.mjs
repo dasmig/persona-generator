@@ -4,8 +4,9 @@
 import { versions } from './versions.mjs';
 import { batchPlan, integer, malformed, outOfRange, seedText } from './batch.mjs';
 
-const keys = new Set(['country', 'sex', 'ages', 'traits', 'referenceDate', 'seed']);
+const keys = new Set(['country', 'sex', 'ages', 'traits', 'referenceDate', 'relations', 'seed']);
 const sexes = new Set(['male', 'female']);
+const relationKeys = new Set(['up', 'down', 'siblings', 'partners', 'names']);
 
 function dateText(date) {
   if (date === undefined) return '';
@@ -27,6 +28,24 @@ function dateText(date) {
   return `${year}-${pad(month)}-${pad(day)}`;
 }
 
+// The family request as the module's "up,down,flags" (flags: 1 siblings, 2 partners, 4 names).
+function relationsText(relations) {
+  if (relations === undefined || relations === false) return '';
+  if (relations === null || (relations !== true && typeof relations !== 'object') || Array.isArray(relations))
+    malformed('relations must be true or { up, down, siblings, partners, names }');
+  const fields = relations === true ? {} : relations;
+  for (const key of Object.keys(fields))
+    if (!relationKeys.has(key)) malformed(`unknown relations field "${key}"; the fields are ${[...relationKeys].join(', ')}`);
+  const flag = (value, name, bit) => {
+    if (value === undefined) return bit;
+    if (typeof value !== 'boolean') malformed(`relations.${name} must be a boolean`);
+    return value ? bit : 0;
+  };
+  const up = fields.up === undefined ? 1 : integer(fields.up, 'relations.up', 0, 2);
+  const down = fields.down === undefined ? 1 : integer(fields.down, 'relations.down', 0, 2);
+  return `${up},${down},${flag(fields.siblings, 'siblings', 1) | flag(fields.partners, 'partners', 2) | flag(fields.names, 'names', 4)}`;
+}
+
 function parse(json) {
   const result = JSON.parse(json);
   if (result.error) throw new Error(result.error);
@@ -41,9 +60,9 @@ function parse(json) {
 export async function createGenerator(createModule, moduleOptions) {
   const module = await createModule(moduleOptions);
   const generate = module.cwrap('dasmig_persona_generate', 'string',
-    ['string', 'string', 'number', 'number', 'number', 'string', 'string']);
+    ['string', 'string', 'number', 'number', 'number', 'string', 'string', 'string']);
   const generateBatchRaw = module.cwrap('dasmig_persona_generate_batch', 'string',
-    ['string', 'string', 'number', 'number', 'number', 'string', 'string', 'number', 'number']);
+    ['string', 'string', 'number', 'number', 'number', 'string', 'string', 'string', 'number', 'number']);
   const requestKeys = new Set([...keys].filter(key => key !== 'seed'));
   const info = parse(module.cwrap('dasmig_persona_info', 'string', [])());
   const countries = Object.freeze([...info.countries]);
@@ -54,7 +73,7 @@ export async function createGenerator(createModule, moduleOptions) {
     if (request === null || typeof request !== 'object' || Array.isArray(request)) malformed('must be an object');
     for (const key of Object.keys(request))
       if (!allowed.has(key)) malformed(`unknown field "${key}"; the fields are ${[...allowed].join(', ')}`);
-    const { country, sex, ages, traits, referenceDate } = request;
+    const { country, sex, ages, traits, referenceDate, relations } = request;
 
     let code = '';
     if (country !== undefined) {
@@ -73,7 +92,7 @@ export async function createGenerator(createModule, moduleOptions) {
       if (min > max) outOfRange(`ages.min (${min}) must not be greater than ages.max (${max})`);
     }
     const count = traits === undefined ? -1 : integer(traits, 'traits', 0, info.max_traits);
-    return [code, sex ?? '', min, max, count, dateText(referenceDate)];
+    return [code, sex ?? '', min, max, count, dateText(referenceDate), relationsText(relations)];
   }
 
   function generateJson(request = {}) {
