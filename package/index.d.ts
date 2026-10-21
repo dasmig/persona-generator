@@ -13,12 +13,16 @@ export interface RelationsRequest {
   partners?: boolean;
   /** Give everyone a name; default true. */
   names?: boolean;
+  /** Add the partners a parent took while the persona was a child, as `stepfather` and `stepmother`; default false. Needs `up: 1` or more. */
+  stepparents?: boolean;
+  /** Add `household`: who the persona lives with at the reference date; default false. */
+  home?: boolean;
 }
 
 export type Relation =
   | 'anchor' | 'father' | 'mother' | 'sibling' | 'half_sibling'
   | 'paternal_grandfather' | 'paternal_grandmother' | 'maternal_grandfather' | 'maternal_grandmother'
-  | 'partner' | 'child' | 'grandchild' | 'stepchild';
+  | 'partner' | 'child' | 'grandchild' | 'stepchild' | 'stepfather' | 'stepmother';
 
 export interface FamilyMember {
   /** Index in `members`; the edges refer to it. */
@@ -42,7 +46,19 @@ export interface FamilyMember {
 export type FamilyEdge =
   | { kind: 'parent_of'; from: number; to: number; genetic?: false }
   | { kind: 'sibling_of'; from: number; to: number; full: boolean }
-  | { kind: 'partner_of'; from: number; to: number; start: number; end?: number; ended: 'ongoing' | 'divorce' | 'death' };
+  | { kind: 'partner_of'; from: number; to: number; start: number; end?: number; ended: 'ongoing' | 'divorce' | 'death' }
+  /** `from` is a stepfather or stepmother of `to` (the persona). */
+  | { kind: 'step_parent_of'; from: number; to: number };
+
+export type HouseholdType =
+  | 'one_person' | 'couple' | 'nuclear' | 'single_parent' | 'with_parents' | 'multi_generation' | 'other';
+
+/** Who the persona lives with at the reference date; present only when `relations.home` was set. */
+export interface Household {
+  type: HouseholdType;
+  /** Member ids, the persona (0) first; all alive. */
+  members: number[];
+}
 
 /** The persona's family, as relationship-generator writes it. `members[0]` is the persona. */
 export interface Family {
@@ -51,6 +67,7 @@ export interface Family {
   reference_date: string;
   members: FamilyMember[];
   edges: FamilyEdge[];
+  household?: Household;
   sources: { fertility: string; unions: string };
   signature: Signature;
 }
