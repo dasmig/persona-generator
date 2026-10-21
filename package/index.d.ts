@@ -1,6 +1,60 @@
 // Types for the dasmig persona generator. The JSON shapes are those of the
 // C++ libraries' to_json(); see each library's doc/usage.md.
 
+/** The family to draw around a persona. Every field is optional. */
+export interface RelationsRequest {
+  /** Generations above the persona: 0 none, 1 parents (default), 2 grandparents too. */
+  up?: 0 | 1 | 2;
+  /** Generations below the persona: 0 none, 1 children (default), 2 grandchildren too. */
+  down?: 0 | 1 | 2;
+  /** Include siblings and half-siblings; default true. They come from the parents, so `up: 0` gives none. */
+  siblings?: boolean;
+  /** Include partners, current and former; default true. */
+  partners?: boolean;
+  /** Give everyone a name; default true. */
+  names?: boolean;
+}
+
+export type Relation =
+  | 'anchor' | 'father' | 'mother' | 'sibling' | 'half_sibling'
+  | 'paternal_grandfather' | 'paternal_grandmother' | 'maternal_grandfather' | 'maternal_grandmother'
+  | 'partner' | 'child' | 'grandchild' | 'stepchild';
+
+export interface FamilyMember {
+  /** Index in `members`; the edges refer to it. */
+  id: number;
+  role: Relation;
+  sex: Sex;
+  /** Absent when names are off or the country's culture has no names. */
+  name?: { given: string; patronymic?: string; family: string; full: string };
+  /** YYYY-MM-DD. */
+  birth: string;
+  twin?: true;
+  alive: boolean;
+  /** Present when alive. */
+  age?: number;
+  /** Present when dead. */
+  death_age?: number;
+  /** YYYY-MM-DD; present when dead. */
+  death?: string;
+}
+
+export type FamilyEdge =
+  | { kind: 'parent_of'; from: number; to: number; genetic?: false }
+  | { kind: 'sibling_of'; from: number; to: number; full: boolean }
+  | { kind: 'partner_of'; from: number; to: number; start: number; end?: number; ended: 'ongoing' | 'divorce' | 'death' };
+
+/** The persona's family, as relationship-generator writes it. `members[0]` is the persona. */
+export interface Family {
+  country: string;
+  /** YYYY-MM-DD: the date ages and who is alive refer to. */
+  reference_date: string;
+  members: FamilyMember[];
+  edges: FamilyEdge[];
+  sources: { fertility: string; unions: string };
+  signature: Signature;
+}
+
 /** What a persona call asks for. Every field is optional: what is left out is drawn. */
 export interface PersonaRequest {
   /**
@@ -22,6 +76,12 @@ export interface PersonaRequest {
    * Default 2023-07-01. The generator never reads the clock, so pass today's date for ages "as of now".
    */
   referenceDate?: string | Date;
+  /**
+   * Also draw the persona's family (`relatives` in the result). `true` for the defaults, or an object.
+   * Unset draws none, and then nothing about the persona changes. The family has its own seed stream,
+   * so the rest of the persona is the same with and without it.
+   */
+  relations?: true | RelationsRequest;
   /**
    * The call seed, a 64-bit unsigned integer: a bigint, a non-negative safe integer, or a string
    * of 1-16 **hexadecimal** digits with an optional `0x` (so `'42'` is 0x42, not 42), the form of
@@ -218,6 +278,8 @@ export interface Persona {
   personality: Personality;
   interest: Interest;
   occupation: Occupation;
+  /** The persona's family; present only when the request had `relations`. */
+  relatives?: Family;
   /** `generate({ ...request, seed: persona.signature.seed })` replays this persona. */
   signature: Signature;
 }

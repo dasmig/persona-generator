@@ -74,10 +74,12 @@ Every field is optional. What is left out is drawn; what is given conditions the
 | `ages` | `{ min, max }`, completed years, 0-120 | The country's age pyramid |
 | `traits` | Number of personality traits, 0 to `personas.maxTraits` | 3 |
 | `referenceDate` | `'YYYY-MM-DD'` or a `Date` (its local date), 1900-2100 | `'2023-07-01'` |
+| `relations` | `true`, or `{ up, down, siblings, partners, names }`: also draw the persona's family into `relatives` | none |
 | `seed` | A `bigint`, a non-negative safe integer, or a **hexadecimal** string | Random |
 
 - **Countries.** Only the countries in `personas.countries` have data in all eight libraries, so another code is an error rather than a persona with a name from the wrong culture.
 - **Traits.** Fewer traits than asked are returned when no other trait is compatible with those already chosen (traits in one group exclude each other).
+- **Family.** `relations: true` adds `relatives`: the persona's parents, siblings, half-siblings, partners and children (`up: 2` adds grandparents, `down: 2` grandchildren), each with a name, birth date and, for the dead, a death date, linked by `edges`. `members[0]` is the persona. The family has its own seed stream, so the rest of the persona is identical with and without it.
 - **Dates.** The generator never reads the clock. Pass `referenceDate: new Date()` for ages as of today, and keep the date with the seed if the persona must replay.
 - **Seeds.** A seed is a 64-bit unsigned integer. A string is read as hexadecimal, optionally after `0x`, which is the form of `signature.seed`: `seed: '42'` is 0x42 (66), not 42. Use a `bigint` or a hexadecimal string for seeds above `Number.MAX_SAFE_INTEGER`.
 
