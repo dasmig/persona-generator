@@ -456,6 +456,19 @@ TEST_CASE("relations follow the request and replay from the seed", "[relations]"
     REQUIRE(b.relatives->parents().size() == 2);
 }
 
+TEST_CASE("relations: stepparents and the household pass through", "[relations]")
+{
+    const auto& gen = psg::instance();
+    auto request = request_for("BR");
+    request.relations = dasmig::family_request{.stepparents = true, .home = true};
+    const auto with = gen.get_persona(request, seed_a);
+    REQUIRE(with.relatives.has_value());
+    REQUIRE(with.relatives->home.has_value());
+    REQUIRE(with.relatives->home->members.front() == with.relatives->anchor().id);
+    REQUIRE(with.to_json().find("\"household\"") != std::string::npos);
+    REQUIRE(gen.get_persona(request, seed_a).to_json() == with.to_json());
+}
+
 TEST_CASE("relations: a persona batch with them is the same for any thread count", "[relations][batch]")
 {
     const auto& gen = psg::instance();
@@ -476,5 +489,5 @@ TEST_CASE("relations: known answer of 1,000 items", "[relations][kat]")
     gen.for_each_persona(request, {.count = 1000, .threads = 4}, 1,
                          [&](std::uint64_t, const dasmig::persona& item)
                          { hash = dasmig::core::hash_combine(hash, dasmig::core::fnv1a64(item.to_json())); });
-    REQUIRE(hash == 0xdea1b993d5948d6bULL);
+    REQUIRE(hash == 0x5c42fe63ae7a90cbULL);
 }
