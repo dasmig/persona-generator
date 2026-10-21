@@ -1,6 +1,6 @@
 {
   "name": "@dasmig/persona",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Complete fictional characters (name, country, city, birth, body, personality, interests, job) from one seeded call, in WebAssembly.",
   "type": "module",
   "main": "./index.mjs",
