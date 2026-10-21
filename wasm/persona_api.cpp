@@ -45,7 +45,7 @@ std::string hex(std::uint64_t value)
 // The request the C API's string and number arguments describe; "" and -1
 // leave a choice to the generator. `relations` is the family: "" for none,
 // otherwise "up,down,flags" with the generations above and below (0 to 2) and
-// the flags 1 siblings, 2 partners, 4 names.
+// the flags 1 siblings, 2 partners, 4 names, 8 stepparents, 16 home.
 dasmig::persona_request make_request(const char* country, const char* sex, int age_min, int age_max, int traits,
                                      const char* reference_date, const char* relations)
 {
@@ -77,14 +77,16 @@ dasmig::persona_request make_request(const char* country, const char* sex, int a
                 throw std::invalid_argument("relations must be \"up,down,flags\"");
             at = result.ptr + 1;
         }
-        if (values[0] < 0 || values[0] > 2 || values[1] < 0 || values[1] > 2 || values[2] < 0 || values[2] > 7)
-            throw std::invalid_argument("relations: up and down are 0 to 2, flags 0 to 7");
+        if (values[0] < 0 || values[0] > 2 || values[1] < 0 || values[1] > 2 || values[2] < 0 || values[2] > 31)
+            throw std::invalid_argument("relations: up and down are 0 to 2, flags 0 to 31");
         dasmig::family_request family;
         family.up = values[0];
         family.down = values[1];
         family.siblings = (values[2] & 1) != 0;
         family.partners = (values[2] & 2) != 0;
         family.names = (values[2] & 4) != 0;
+        family.stepparents = (values[2] & 8) != 0;
+        family.home = (values[2] & 16) != 0;
         request.relations = family;
     }
     return request;

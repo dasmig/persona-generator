@@ -54,6 +54,11 @@ assert.deepEqual(personas.generate({ country: 'BR', seed: 7, relations: {} }), w
 const grand = personas.generate({ country: 'BR', seed: 7, relations: { up: 2, down: 0, partners: false, names: false } });
 assert.ok(grand.relatives.members.some(m => m.role === 'paternal_grandfather'));
 assert.ok(grand.relatives.members.every(m => m.name === undefined && m.role !== 'partner' && m.role !== 'child'));
+const homed = personas.generate({ country: 'BR', seed: 7, relations: { stepparents: true, home: true } });
+assert.equal(homed.relatives.household.members[0], 0);
+assert.ok(['one_person', 'couple', 'nuclear', 'single_parent', 'with_parents', 'multi_generation', 'other'].includes(homed.relatives.household.type));
+assert.equal(withFamily.relatives.household, undefined);
+assert.throws(() => personas.generate({ relations: { stepparents: 1 } }), TypeError);
 assert.throws(() => personas.generate({ relations: { up: 3 } }), RangeError);
 assert.throws(() => personas.generate({ relations: { depth: 1 } }), TypeError);
 assert.equal(personas.generateBatch({ request: { country: 'BR', relations: true }, count: 3, seed: 5 })[2].relatives.members[0].role, 'anchor');

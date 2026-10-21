@@ -6,7 +6,7 @@ import { batchPlan, integer, malformed, outOfRange, seedText } from './batch.mjs
 
 const keys = new Set(['country', 'sex', 'ages', 'traits', 'referenceDate', 'relations', 'seed']);
 const sexes = new Set(['male', 'female']);
-const relationKeys = new Set(['up', 'down', 'siblings', 'partners', 'names']);
+const relationKeys = new Set(['up', 'down', 'siblings', 'partners', 'names', 'stepparents', 'home']);
 
 function dateText(date) {
   if (date === undefined) return '';
@@ -28,22 +28,22 @@ function dateText(date) {
   return `${year}-${pad(month)}-${pad(day)}`;
 }
 
-// The family request as the module's "up,down,flags" (flags: 1 siblings, 2 partners, 4 names).
+// The family request as the module's "up,down,flags" (flags: 1 siblings, 2 partners, 4 names, 8 stepparents, 16 home).
 function relationsText(relations) {
   if (relations === undefined || relations === false) return '';
   if (relations === null || (relations !== true && typeof relations !== 'object') || Array.isArray(relations))
-    malformed('relations must be true or { up, down, siblings, partners, names }');
+    malformed('relations must be true or { up, down, siblings, partners, names, stepparents, home }');
   const fields = relations === true ? {} : relations;
   for (const key of Object.keys(fields))
     if (!relationKeys.has(key)) malformed(`unknown relations field "${key}"; the fields are ${[...relationKeys].join(', ')}`);
-  const flag = (value, name, bit) => {
-    if (value === undefined) return bit;
+  const flag = (value, name, bit, fallback = bit) => {
+    if (value === undefined) return fallback;
     if (typeof value !== 'boolean') malformed(`relations.${name} must be a boolean`);
     return value ? bit : 0;
   };
   const up = fields.up === undefined ? 1 : integer(fields.up, 'relations.up', 0, 2);
   const down = fields.down === undefined ? 1 : integer(fields.down, 'relations.down', 0, 2);
-  return `${up},${down},${flag(fields.siblings, 'siblings', 1) | flag(fields.partners, 'partners', 2) | flag(fields.names, 'names', 4)}`;
+  return `${up},${down},${flag(fields.siblings, 'siblings', 1) | flag(fields.partners, 'partners', 2) | flag(fields.names, 'names', 4) | flag(fields.stepparents, 'stepparents', 8, 0) | flag(fields.home, 'home', 16, 0)}`;
 }
 
 function parse(json) {
