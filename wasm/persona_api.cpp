@@ -64,6 +64,29 @@ dasmig::persona_request make_request(const char* country, const char* sex, int a
     }
     if (traits >= 0) request.traits = static_cast<std::size_t>(traits);
     if (*reference_date != '\0') request.reference_date = parse_reference_date(reference_date);
+    if (*relations != '\0')
+    {
+        int values[3]{};
+        const std::string_view text{relations};
+        const char* at = text.data();
+        const char* const end = at + text.size();
+        for (int i = 0; i < 3; ++i)
+        {
+            const auto result = std::from_chars(at, end, values[i]);
+            if (result.ec != std::errc{} || (i < 2 ? result.ptr == end || *result.ptr != ',' : result.ptr != end))
+                throw std::invalid_argument("relations must be \"up,down,flags\"");
+            at = result.ptr + 1;
+        }
+        if (values[0] < 0 || values[0] > 2 || values[1] < 0 || values[1] > 2 || values[2] < 0 || values[2] > 7)
+            throw std::invalid_argument("relations: up and down are 0 to 2, flags 0 to 7");
+        dasmig::family_request family;
+        family.up = values[0];
+        family.down = values[1];
+        family.siblings = (values[2] & 1) != 0;
+        family.partners = (values[2] & 2) != 0;
+        family.names = (values[2] & 4) != 0;
+        request.relations = family;
+    }
     return request;
 }
 
