@@ -169,6 +169,8 @@ for (const auto& parent : p.relatives->parents()) std::cout << parent.name << '
 
 The persona fills in the request's `anchor` (country, sex, birth date and name), so the parents share the persona's family name by the country's convention, and the request's `reference_date` replaces the family's. The rest of the `family_request` is yours. `relatives` is empty and `to_json()` has no `relatives` key unless the request asked for it, and the rest of the persona and its `signature()` are the same with and without it. The family is drawn from a seed split from the persona's, so it replays with the persona's seed; its own `signature` is inside `relatives`.
 
+Set `stepparents` (a parent's new partner) and `home` (who the persona lives with, as `household` in the JSON) on the `family_request` to add them; both are off by default and need relationship-generator 1.1.0 or later.
+
 Without `relations`, relationship-generator is not used and its data is not needed: `load()` ignores a missing tier of it. With `relations`, `get_persona` throws `std::runtime_error` if it has no data (the `lite` tier is compiled in with `DASMIG_RELATIONSHIP_EMBED`). It uses its own birth-generator and name-generator instances, the singletons by default, as the persona does.
 
 ## Migrating to v3
