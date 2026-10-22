@@ -14,9 +14,9 @@ runs:
     - uses: actions/checkout@v4
       with: {repository: dasmig/city-generator, ref: v4.2.0, path: libs/city-generator}
     - uses: actions/checkout@v4
-      with: {repository: dasmig/country-generator, ref: v3.1.2, path: libs/country-generator}
+      with: {repository: dasmig/country-generator, ref: v3.2.0, path: libs/country-generator}
     - uses: actions/checkout@v4
-      with: {repository: dasmig/entity-generator, ref: v4.2.0, path: libs/entity-generator}
+      with: {repository: dasmig/entity-generator, ref: v4.2.1, path: libs/entity-generator}
     - uses: actions/checkout@v4
       with: {repository: dasmig/interest-generator, ref: v3.0.1, path: libs/interest-generator}
     - uses: actions/checkout@v4
