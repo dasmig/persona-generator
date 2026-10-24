@@ -24,6 +24,6 @@ runs:
     - uses: actions/checkout@v4
       with: {repository: dasmig/occupation-generator, ref: v3.0.1, path: libs/occupation-generator}
     - uses: actions/checkout@v4
-      with: {repository: dasmig/relationship-generator, ref: v1.1.0, path: libs/relationship-generator}
+      with: {repository: dasmig/relationship-generator, ref: v1.2.0, path: libs/relationship-generator}
     - uses: actions/checkout@v4
       with: {repository: dasmig/trait-generator, ref: v2.1.2, path: libs/trait-generator}
