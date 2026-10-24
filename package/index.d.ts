@@ -13,7 +13,7 @@ export interface RelationsRequest {
   partners?: boolean;
   /** Give everyone a name; default true. */
   names?: boolean;
-  /** Add the partners a parent took while the persona was a child, as `stepfather` and `stepmother`; default false. Needs `up: 1` or more. */
+  /** Add the partners a parent took while the persona was a child, as `stepfather` and `stepmother`; default false. Needs `up: 1` or more. With `siblings`, also their children: those with the parent are `half_sibling`s, those from before are `stepsibling`s. */
   stepparents?: boolean;
   /** Add `household`: who the persona lives with at the reference date; default false. */
   home?: boolean;
@@ -22,7 +22,7 @@ export interface RelationsRequest {
 export type Relation =
   | 'anchor' | 'father' | 'mother' | 'sibling' | 'half_sibling'
   | 'paternal_grandfather' | 'paternal_grandmother' | 'maternal_grandfather' | 'maternal_grandmother'
-  | 'partner' | 'child' | 'grandchild' | 'stepchild' | 'stepfather' | 'stepmother';
+  | 'partner' | 'child' | 'grandchild' | 'stepchild' | 'stepfather' | 'stepmother' | 'stepsibling';
 
 export interface FamilyMember {
   /** Index in `members`; the edges refer to it. */
