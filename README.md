@@ -113,6 +113,7 @@ Tested with:
 | [birth-generator](https://github.com/dasmig/birth-generator) | Demographically plausible birthdays |
 | [city-generator](https://github.com/dasmig/city-generator) | Weighted city selection by population |
 | [country-generator](https://github.com/dasmig/country-generator) | Weighted country selection by population |
+| [device-generator](https://github.com/dasmig/device-generator) | Devices, browsers, user agents and IP addresses that fit together |
 | [email-generator](https://github.com/dasmig/email-generator) | Email addresses in each country's style |
 | [entity-generator](https://github.com/dasmig/entity-generator) | ECS-based entity generation |
 | [interest-generator](https://github.com/dasmig/interest-generator) | Religion, hobbies and favourite media by country, age and sex |
