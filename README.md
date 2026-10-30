@@ -100,7 +100,7 @@ Tested with:
 
 | Dependency | Version | Bundled | Purpose |
 |-----------|---------|---------|---------|
-| [dasmig-core](https://github.com/dasmig/dasmig-core) | 1.3 | Yes (`core.hpp`, `core/`) | Platform-independent random engine and distributions, JSON |
+| [dasmig-core](https://github.com/dasmig/dasmig-core) | 1.4 | Yes (`core.hpp`, `core/`) | Platform-independent random engine and distributions, JSON |
 | the nine libraries above | see [CI](https://github.com/dasmig/persona-generator/blob/main/.github/actions/checkout-libs/action.yml) | No | The persona's parts |
 | [Catch2](https://github.com/catchorg/Catch2) | 3.x | Yes (amalgamated) | Unit testing |
 
