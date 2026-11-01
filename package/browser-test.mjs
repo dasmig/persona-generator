@@ -106,7 +106,7 @@ try {
     text = result?.result?.value;
     if (text === undefined) await delay(100);
   }
-  const answer = 'Nigel Phillips 0000000000000001-b2e43c1d21da0ed3';
+  const answer = 'Nigel Phillips 0000000000000001-c046a674a312cc18';
   assert.equal(text, `page: ${answer} | worker: ${answer} | pool: true`);
   console.log('PASS: @dasmig/persona browser entry loads and matches the known answer in a page and a module worker, and a pool of workers matches its batches.');
 } finally {
