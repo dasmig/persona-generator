@@ -25,7 +25,7 @@ const signature = p => p.signature.seed + '-' + p.signature.data;
 
 assert.equal(personas.countries.length, 79);
 assert.ok(!personas.countries.includes('KR'));
-assert.equal(personas.dataHash, 'f8ef021d73722872');
+assert.equal(personas.dataHash, '9b2608cec2be11f0');
 assert.equal(personas.maxTraits, 52);
 assert.equal(personas.versions['persona-generator'].startsWith('v'), true, JSON.stringify(personas.versions));
 assert.equal(Object.keys(personas.versions).length, 11);
@@ -34,17 +34,17 @@ assert.ok(Object.isFrozen(personas) && Object.isFrozen(personas.countries));
 // Known answers.
 const one = personas.generate({ seed: 1 });
 assert.equal(summary(one), 'Nigel Phillips, 13, male, Gosport, United Kingdom, student');
-assert.equal(signature(one), '0000000000000001-b2e43c1d21da0ed3');
+assert.equal(signature(one), '0000000000000001-c046a674a312cc18');
 const two = personas.generate({ seed: '2' });
 assert.equal(summary(two), 'Sadaf Esmaeili, 16, female, Mashhad, Iran, student');
-assert.equal(signature(two), '0000000000000002-b2e43c1d21da0ed3');
+assert.equal(signature(two), '0000000000000002-c046a674a312cc18');
 const three = personas.generate({ country: 'BR', sex: 'female', ages: { min: 25, max: 35 }, traits: 5, seed: 3n });
 assert.equal(summary(three), 'Jéssica Tomaz Cardozo, 34, female, São Paulo, Brazil, Farm labourer, BRL 13,000 a year');
-assert.equal(signature(three), '0000000000000003-6c4aa1b0ee3424d5');
+assert.equal(signature(three), '0000000000000003-b3746b1c4d8759a2');
 assert.equal(three.personality.traits.length, 5);
 const four = personas.generate({ country: 'jp', referenceDate: '2030-03-09', seed: 4 });
 assert.equal(summary(four), 'Iwasaki Yasushi, 70, male, Edogawe, Japan, Shop assistant');
-assert.equal(signature(four), '0000000000000004-0e384fb2b29285df');
+assert.equal(signature(four), '0000000000000004-7de5ac635937f92c');
 
 // Relations add the family and change nothing else.
 const plain = personas.generate({ country: 'BR', seed: 7 });
@@ -78,7 +78,7 @@ for (let s = 0; s < 2000; ++s) {
   const json = personas.generateJson({ seed: s }).replace(/"admin1":"(?:[^"\\]|\\.)*"/, '"admin1":""');
   for (const byte of encoder.encode(json)) hash = ((hash ^ BigInt(byte)) * 0x100000001b3n) & mask;
 }
-assert.equal(hash.toString(16), 'e96e869ad772c32a');
+assert.equal(hash.toString(16), '26f83332184df0c1');
 
 // Admin1 names are embedded.
 assert.equal(personas.generate({ country: 'BR', seed: 1 }).admin1.length > 0, true);
@@ -144,7 +144,7 @@ for (const [request, kind, message] of [
     JSON.stringify(request, (_, v) => typeof v === 'bigint' ? v.toString() : v));
 }
 // A failed call leaves the generator usable.
-assert.equal(signature(personas.generate({ seed: 1 })), '0000000000000001-b2e43c1d21da0ed3');
+assert.equal(signature(personas.generate({ seed: 1 })), '0000000000000001-c046a674a312cc18');
 
 // Batches. Persona i of a batch is the single call with the seed
 // core::item_seed(batchSeed, i): splitmix64_mix(seed ^ splitmix64_mix(i ^ 0x6a09e667f3bcc909)).
