@@ -270,6 +270,13 @@ export interface Job {
   tags: string[];
 }
 
+/** An amount of money, in major units of an ISO 4217 currency. */
+export interface Money {
+  amount: number;
+  /** ISO 4217 alphabetic code, such as "BRL". */
+  currency: string;
+}
+
 export interface Occupation {
   country: string;
   sex: Sex;
@@ -278,6 +285,8 @@ export interface Occupation {
   education: EducationLevel | null;
   /** Null unless employed. */
   job: Job | null;
+  /** Gross annual income in the country's currency; null unless employed, or where the country is not served. */
+  income: Money | null;
   signature: Signature;
 }
 
