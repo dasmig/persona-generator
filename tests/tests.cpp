@@ -263,14 +263,14 @@ TEST_CASE("the age conditions the body and the job", "[pipeline]")
 TEST_CASE("known answers for fixed seeds", "[kat]")
 {
     const auto& gen = psg::instance();
-    REQUIRE(gen.data_hash() == 0x9b2608cec2be11f0ULL);
+    REQUIRE(gen.data_hash() == 0x3229071c54eee6bfULL);
 
     const auto one = gen.get_persona(persona_request{}, 1);
     REQUIRE(one.to_string() == "Nigel Phillips, 13, male, Gosport, United Kingdom, student");
-    REQUIRE(one.signature().to_string() == "0000000000000001-c046a674a312cc18");
+    REQUIRE(one.signature().to_string() == "0000000000000001-1ecd290e3d20a202");
     const auto two = gen.get_persona(persona_request{}, 2);
     REQUIRE(two.to_string() == "Sadaf Esmaeili, 16, female, Mashhad, Iran, student");
-    REQUIRE(two.signature().to_string() == "0000000000000002-c046a674a312cc18");
+    REQUIRE(two.signature().to_string() == "0000000000000002-1ecd290e3d20a202");
 
     persona_request brazil;
     brazil.country = "BR";
@@ -278,15 +278,15 @@ TEST_CASE("known answers for fixed seeds", "[kat]")
     brazil.ages = dasmig::age_range{.min = 25, .max = 35};
     brazil.traits = 5;
     const auto three = gen.get_persona(brazil, 3);
-    REQUIRE(three.to_string() == "Jéssica Tomaz Cardozo, 34, female, São Paulo, Brazil, Farm labourer, BRL 13,000 a year");
-    REQUIRE(three.signature().to_string() == "0000000000000003-b3746b1c4d8759a2");
+    REQUIRE(three.to_string() == "Jéssica Tomaz Cardozo, 34, female, São Paulo, Brazil, Farm labourer, BRL 12,900 a year");
+    REQUIRE(three.signature().to_string() == "0000000000000003-98a218df38f7e594");
 
     persona_request japan;
     japan.country = "jp";
     japan.reference_date = std::chrono::year_month_day{std::chrono::year{2030}, std::chrono::March, std::chrono::day{9}};
     const auto four = gen.get_persona(japan, 4);
     REQUIRE(four.to_string() == "Iwasaki Yasushi, 70, male, Edogawe, Japan, Shop assistant");
-    REQUIRE(four.signature().to_string() == "0000000000000004-7de5ac635937f92c");
+    REQUIRE(four.signature().to_string() == "0000000000000004-bb5404c1045abbc6");
 
     // A hash of 2,000 JSON documents (not 10,000 as in the single-purpose
     // libraries: a persona runs eight of them, and each is covered there).
@@ -299,7 +299,7 @@ TEST_CASE("known answers for fixed seeds", "[kat]")
             h *= 0x100000001b3ULL;
         }
     }
-    REQUIRE(h == 0x26f83332184df0c1ULL);
+    REQUIRE(h == 0xb68320266eb85006ULL);
 }
 
 // ---------------------------------------------------------------------------
@@ -395,7 +395,7 @@ TEST_CASE("persona batch: known answer of 10,000 items", "[batch][kat]")
     gen.for_each_persona(request, {.count = 10000, .threads = 4}, 1,
                         [&](std::uint64_t, const dasmig::persona& item)
                         { hash = dasmig::core::hash_combine(hash, dasmig::core::fnv1a64(item.to_json())); });
-    REQUIRE(hash == 0x47ece1c020d2db8eULL);
+    REQUIRE(hash == 0x22be6a56b22800efULL);
 }
 
 // ---------------------------------------------------------------------------
@@ -489,5 +489,5 @@ TEST_CASE("relations: known answer of 1,000 items", "[relations][kat]")
     gen.for_each_persona(request, {.count = 1000, .threads = 4}, 1,
                          [&](std::uint64_t, const dasmig::persona& item)
                          { hash = dasmig::core::hash_combine(hash, dasmig::core::fnv1a64(item.to_json())); });
-    REQUIRE(hash == 0x01e6ead22a3e88beULL);
+    REQUIRE(hash == 0xbcdc063f3a3c89b1ULL);
 }

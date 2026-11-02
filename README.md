@@ -16,7 +16,7 @@
 Complete characters composed from the other dasmig generators: one call draws a country, a city, a birth, a body, a name, interests, an occupation and a personality, each conditioned on what was drawn before, and returns them as typed results and one JSON document.
 
 ```
-Jéssica Tomaz Cardozo, 34, female, São Paulo, Brazil, Farm labourer, BRL 13,000 a year
+Jéssica Tomaz Cardozo, 34, female, São Paulo, Brazil, Farm labourer, BRL 12,900 a year
 ```
 
 ## Features
