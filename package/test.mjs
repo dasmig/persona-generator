@@ -27,8 +27,10 @@ assert.equal(personas.countries.length, 79);
 assert.ok(!personas.countries.includes('KR'));
 assert.equal(personas.dataHash, '3229071c54eee6bf');
 assert.equal(personas.maxTraits, 52);
+assert.equal(personas.identityDataHash, '14750e64ceb541ac');
+assert.equal(personas.financeDataHash, '2ef270849d0c325c');
 assert.equal(personas.versions['persona-generator'].startsWith('v'), true, JSON.stringify(personas.versions));
-assert.equal(Object.keys(personas.versions).length, 11);
+assert.equal(Object.keys(personas.versions).length, 13);
 assert.ok(Object.isFrozen(personas) && Object.isFrozen(personas.countries));
 
 // Known answers.
@@ -79,6 +81,38 @@ for (let s = 0; s < 2000; ++s) {
   for (const byte of encoder.encode(json)) hash = ((hash ^ BigInt(byte)) * 0x100000001b3n) & mask;
 }
 assert.equal(hash.toString(16), 'b68320266eb85006');
+
+// Papers and a wallet: off by default, and nothing else changes when they are on.
+const papers = { documents: ['passport'] };
+const money = { cards: ['any'], cardNumbers: 'test_number' };
+const full = personas.generate({ country: 'BR', sex: 'female', ages: { min: 30, max: 40 }, identity: papers, finance: money, seed: 0x0123456789abcdefn });
+assert.equal(full.name, 'Yasmin Tavares');
+assert.equal(full.identity.numbers[0].formatted, '754.149.568-98');
+assert.equal(full.identity.documents[0].mrz[0], 'P<BRATAVARES<<YASMIN<<<<<<<<<<<<<<<<<<<<<<<<');
+assert.equal(full.finance.cards[0].holder, 'YASMIN TAVARES');
+const { identity: i_, finance: f_, signature: s_, ...withoutParts } = full;
+const { signature: s2_, ...withoutOwn } = personas.generate({ country: 'BR', sex: 'female', ages: { min: 30, max: 40 }, seed: 0x0123456789abcdefn });
+assert.deepEqual(withoutParts, withoutOwn);
+assert.equal('identity' in withoutOwn, false);
+assert.equal('finance' in withoutOwn, false);
+const safe = personas.generate({ country: 'FR', ages: { min: 30, max: 40 }, identity: true, safe: true, seed: 9 });
+assert.equal(safe.identity.numbers[0].reserved, true);
+assert.equal(safe.identity.documents.length, 0);
+assert.ok(Array.isArray(personas.generate({ country: 'FI', finance: true, seed: 9 }).finance.accounts));
+hash = 0xcbf29ce484222325n;
+for (let s = 0; s < 500; ++s) {
+  const json = personas.generateJson({ identity: papers, finance: money, seed: s }).replace(/"admin1":"(?:[^"\\]|\\.)*"/, '"admin1":""');
+  for (const byte of encoder.encode(json)) hash = ((hash ^ BigInt(byte)) * 0x100000001b3n) & mask;
+}
+assert.equal(hash.toString(16), '8d89c0d34fdccc5b');
+for (const [request, type, pattern] of [
+  [{ identity: 'yes' }, TypeError, /identity must be a boolean/],
+  [{ identity: { documents: ['licence'] } }, RangeError, /identity.documents must hold/],
+  [{ finance: 3 }, TypeError, /finance must be a boolean/],
+  [{ finance: { accounts: ['pension'] } }, RangeError, /finance.accounts must hold/],
+  [{ finance: { holding: 'asked' } }, TypeError, /unknown finance field/],
+  [{ safe: 'yes' }, TypeError, /safe must be a boolean/],
+]) assert.throws(() => personas.generate(request), type, JSON.stringify(request));
 
 // Admin1 names are embedded.
 assert.equal(personas.generate({ country: 'BR', seed: 1 }).admin1.length > 0, true);

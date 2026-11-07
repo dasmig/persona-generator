@@ -19,6 +19,15 @@ Complete characters composed from the other dasmig generators: one call draws a 
 Jéssica Tomaz Cardozo, 34, female, São Paulo, Brazil, Farm labourer, BRL 12,900 a year
 ```
 
+## Limits
+
+These apply when a request asks for `identity` or `finance`. Without them, a persona has no numbers, documents, accounts or cards.
+
+- Without `safe`, national numbers, accounts and cards are structurally valid and may match a real person's. The libraries look nothing up and cannot tell.
+- They are test data. Never use them to identify anyone, to open accounts, to pass an identity or payment check, or on a live payment system. Trying card numbers on a live system is card testing, which is fraud, whatever produced them.
+- `safe` means different things per scheme, and for many accounts it promises nothing. See [id-generator's limits](https://github.com/dasmig/id-generator#limits) and [finance-generator's limits](https://github.com/dasmig/finance-generator#limits).
+- Documents and cards are data, not images.
+
 ## Features
 
 - **One Call, Eight Libraries**. A country sets the city, the name's culture, the body, the interests and the job; the birth's age and sex set the rest. The order and dependencies are declared as [entity-generator](https://github.com/dasmig/entity-generator) fields, so they are checked, not assumed.
@@ -27,23 +36,27 @@ Jéssica Tomaz Cardozo, 34, female, São Paulo, Brazil, Farm labourer, BRL 12,90
 
 - **Ask for What You Need**. A `persona_request` can fix the country, the sex, an age range, the reference date and the number of traits. What is left out is drawn. Set `relations` to also get the persona's family (parents, siblings, partners, children), drawn by [relationship-generator](https://github.com/dasmig/relationship-generator); it is off by default and changes nothing else.
 
+- **Papers, When Asked**. Set `identity` to also get the persona's national numbers and documents from [id-generator](https://github.com/dasmig/id-generator), built from their birth date, sex, names and city: a number that encodes a place encodes their city, and a birthplace left unset is that city. Off by default; turning it on changes nothing else.
+
+- **A Wallet, When Asked**. Set `finance` to also get bank accounts and payment cards from [finance-generator](https://github.com/dasmig/finance-generator), with the persona's name on the card. What is asked for becomes a chance by the country's Global Findex shares (`ownership::surveyed`), so many personas have no account. Off by default; turning it on changes nothing else.
+
 - **Deterministic Seeding**. `get_persona(request, seed)` is a pure function of the request, the seed and the data, and `persona::seed()` replays a previous persona. Each library draws from its own stream split from the seed, so forcing one choice does not shift the others.
 
 - **Identical Everywhere**. A seed gives the same result on every compiler, standard library and CPU (GCC, Clang, MSVC, Emscripten; x86-64 and ARM64), checked by known-answer tests.
 
-- **JSON and Replay**. `to_json()` writes every library's result as that library writes it; `signature()` records the seed and a hash of the data of all eight libraries and the request.
+- **JSON and Replay**. `to_json()` writes every library's result as that library writes it; `signature()` records the seed and a hash of the data of all eight libraries and the request (and id-generator's and finance-generator's, for a persona with papers or a wallet).
 
 - **Your Data**. The generator holds no data of its own. It calls the instances of the libraries, so their tiers (`lite`, `full`) and layers (`extend()`) are the persona's. Construct a `psg` over your own instances to use different data side by side.
 
 ## Integration
 
-[`personagen.hpp`](https://github.com/dasmig/persona-generator/blob/main/dasmig/personagen.hpp) is the library [released here](https://github.com/dasmig/persona-generator/releases). It composes these libraries, which must be on the include path (with `dasmig-core` in each): [biodata](https://github.com/dasmig/biodata-generator), [birth](https://github.com/dasmig/birth-generator), [city](https://github.com/dasmig/city-generator), [country](https://github.com/dasmig/country-generator), [entity](https://github.com/dasmig/entity-generator), [interest](https://github.com/dasmig/interest-generator), [name](https://github.com/dasmig/name-generator), [occupation](https://github.com/dasmig/occupation-generator), [relationship](https://github.com/dasmig/relationship-generator) and [trait](https://github.com/dasmig/trait-generator). The release notes list the versions it was tested with. Add
+[`personagen.hpp`](https://github.com/dasmig/persona-generator/blob/main/dasmig/personagen.hpp) is the library [released here](https://github.com/dasmig/persona-generator/releases). It composes these libraries, which must be on the include path (with `dasmig-core` in each): [biodata](https://github.com/dasmig/biodata-generator), [birth](https://github.com/dasmig/birth-generator), [city](https://github.com/dasmig/city-generator), [country](https://github.com/dasmig/country-generator), [entity](https://github.com/dasmig/entity-generator), [finance](https://github.com/dasmig/finance-generator), [id](https://github.com/dasmig/id-generator), [interest](https://github.com/dasmig/interest-generator), [name](https://github.com/dasmig/name-generator), [occupation](https://github.com/dasmig/occupation-generator), [relationship](https://github.com/dasmig/relationship-generator) and [trait](https://github.com/dasmig/trait-generator). The release notes list the versions it was tested with. Add
 
 ```cpp
 #include <dasmig/personagen.hpp>
 ```
 
-to the files you want to use it in. Each library finds its data as it does alone (a `resources` folder, or its compiled-in `lite` tier: define `DASMIG_COUNTRY_EMBED`, `DASMIG_CITY_EMBED`, `DASMIG_BIRTH_EMBED`, `DASMIG_BIODATA_EMBED`, `DASMIG_NAME_EMBED`, `DASMIG_INTEREST_EMBED`, `DASMIG_OCCUPATION_EMBED` and `DASMIG_TRAIT_EMBED`).
+to the files you want to use it in. Each library finds its data as it does alone (a `resources` folder, or its compiled-in `lite` tier: define `DASMIG_COUNTRY_EMBED`, `DASMIG_CITY_EMBED`, `DASMIG_BIRTH_EMBED`, `DASMIG_BIODATA_EMBED`, `DASMIG_NAME_EMBED`, `DASMIG_INTEREST_EMBED`, `DASMIG_OCCUPATION_EMBED` and `DASMIG_TRAIT_EMBED`, plus `DASMIG_ID_EMBED` and `DASMIG_FINANCE_EMBED` for `identity` and `finance`).
 
 ## Usage
 
@@ -101,7 +114,7 @@ Tested with:
 | Dependency | Version | Bundled | Purpose |
 |-----------|---------|---------|---------|
 | [dasmig-core](https://github.com/dasmig/dasmig-core) | 1.4 | Yes (`core.hpp`, `core/`) | Platform-independent random engine and distributions, JSON |
-| the nine libraries above | see [CI](https://github.com/dasmig/persona-generator/blob/main/.github/actions/checkout-libs/action.yml) | No | The persona's parts |
+| the libraries above | see [CI](https://github.com/dasmig/persona-generator/blob/main/.github/actions/checkout-libs/action.yml) | No | The persona's parts |
 | [Catch2](https://github.com/catchorg/Catch2) | 3.x | Yes (amalgamated) | Unit testing |
 
 ## Related Libraries
@@ -116,6 +129,8 @@ Tested with:
 | [device-generator](https://github.com/dasmig/device-generator) | Devices, browsers, user agents and IP addresses that fit together |
 | [email-generator](https://github.com/dasmig/email-generator) | Email addresses in each country's style |
 | [entity-generator](https://github.com/dasmig/entity-generator) | ECS-based entity generation |
+| [finance-generator](https://github.com/dasmig/finance-generator) | Bank accounts and payment cards in each country's form |
+| [id-generator](https://github.com/dasmig/id-generator) | National identity numbers, passports and identity cards that fit a person and a date |
 | [interest-generator](https://github.com/dasmig/interest-generator) | Religion, hobbies and favourite media by country, age and sex |
 | [name-generator](https://github.com/dasmig/name-generator) | Culturally appropriate full names |
 | [nickname-generator](https://github.com/dasmig/nickname-generator) | Gamer-style nicknames |
@@ -124,6 +139,8 @@ Tested with:
 | [relationship-generator](https://github.com/dasmig/relationship-generator) | Families around a person: parents, siblings, partners and children |
 | [trait-generator](https://github.com/dasmig/trait-generator) | Personality traits with conflicts, synergies and Big Five axes |
 | [user-generator](https://github.com/dasmig/user-generator) | Complete user records: account, username, email, phone and address |
+| [vehicle-generator](https://github.com/dasmig/vehicle-generator) | Cars and motorcycles with plates and VINs that fit their country and date |
+| [weather-generator](https://github.com/dasmig/weather-generator) | Daily weather for any place on land and any date |
 
 ## License
 

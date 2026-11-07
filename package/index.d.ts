@@ -100,6 +100,25 @@ export interface PersonaRequest {
    */
   relations?: true | RelationsRequest;
   /**
+   * Add `identity`, the persona's national numbers and documents (id-generator), from their birth date,
+   * sex, name and city. `true` asks for the numbers only. Unset, nothing about the persona changes.
+   */
+  identity?: boolean | { documents?: ('passport' | 'id_card')[] };
+  /**
+   * Add `finance`, the persona's bank accounts and payment cards (finance-generator). `true` asks for one
+   * current account. What is asked for is a chance, by the country's Global Findex shares, so many
+   * have none. Unset, nothing about the persona changes. A card number from `network_range`, the
+   * default without `safe`, may match a real card: test data only.
+   */
+  finance?: boolean | {
+    accounts?: ('current' | 'savings')[];
+    cards?: ('debit' | 'credit' | 'prepaid' | 'any')[];
+    cardNumbers?: 'network_range' | 'test_number' | 'wrong_check';
+    network?: string;
+  };
+  /** Make the numbers, documents, accounts and cards by the libraries' safe methods. Default false. */
+  safe?: boolean;
+  /**
    * The call seed, a 64-bit unsigned integer: a bigint, a non-negative safe integer, or a string
    * of 1-16 **hexadecimal** digits with an optional `0x` (so `'42'` is 0x42, not 42), the form of
    * `signature.seed`. Unset draws a random one. The same seed, request and data give the same persona.
@@ -306,6 +325,10 @@ export interface Persona {
   occupation: Occupation;
   /** The persona's family; present only when the request had `relations`. */
   relatives?: Family;
+  /** Only with `identity`; as id-generator writes it. */
+  identity?: { country_code: string; birth_date: string; sex: Sex; numbers: Record<string, any>[]; documents: Record<string, any>[]; signature: Signature };
+  /** Only with `finance`; as finance-generator writes it. */
+  finance?: { country_code: string; birth_date: string; accounts: Record<string, any>[]; cards: Record<string, any>[]; signature: Signature };
   /** `generate({ ...request, seed: persona.signature.seed })` replays this persona. */
   signature: Signature;
 }

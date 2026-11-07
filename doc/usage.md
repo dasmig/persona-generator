@@ -44,6 +44,8 @@ int main()
 | `reference_date` | 2023-07-01 | The date ages are computed at. The library never reads the clock |
 | `traits` | 3 | How many personality traits |
 | `relations` | unset | A `dasmig::family_request`: also draw the persona's family (see <a href="#relatives">Relatives</a>) |
+| `identity` | unset | A `dasmig::identity_request`: also draw the persona's numbers and documents (see <a href="#papers-and-wallet">Papers and Wallet</a>) |
+| `finance` | unset | A `dasmig::finance_request`: also draw the persona's accounts and cards (see <a href="#papers-and-wallet">Papers and Wallet</a>) |
 
 ```cpp
 dasmig::persona_request request;
@@ -172,6 +174,26 @@ The persona fills in the request's `anchor` (country, sex, birth date and name),
 Set `stepparents` (a parent's new partner, and with `siblings` their children: half-siblings with the parent and `stepsibling`s from before, which need relationship-generator 1.2.0) and `home` (who the persona lives with, as `household` in the JSON) on the `family_request` to add them; both are off by default and need relationship-generator 1.1.0 or later.
 
 Without `relations`, relationship-generator is not used and its data is not needed: `load()` ignores a missing tier of it. With `relations`, `get_persona` throws `std::runtime_error` if it has no data (the `lite` tier is compiled in with `DASMIG_RELATIONSHIP_EMBED`). It uses its own birth-generator and name-generator instances, the singletons by default, as the persona does.
+
+## Papers and Wallet
+
+Set `request.identity` and `request.finance` to draw the persona's national numbers and documents with [id-generator](https://github.com/dasmig/id-generator), and their bank accounts and payment cards with [finance-generator](https://github.com/dasmig/finance-generator). Read [the limits](../README.md#limits) first: these values are test data.
+
+```cpp
+persona_request request;
+request.country = "BR";
+request.identity = dasmig::identity_request{.documents = {dasmig::id_document_kind::passport}};
+request.finance = dasmig::finance_request{.cards = {std::nullopt}, .card_numbers = dasmig::card_source::test_number};
+const auto p = psg::instance().get_persona(request);
+p.papers->numbers;         // the country's primary number, when it has one
+p.papers->documents;       // the passport, with its machine-readable zone
+p.wallet->accounts;        // empty for someone the survey says holds none
+```
+
+- **What the persona fills in.** The country, the birth date, the sex, the names, the reference date and, for the numbers, the city as the residence, so a number that encodes a place encodes theirs. A birthplace left unset is the same city.
+- **Who holds what.** A persona is meant to be believable, so `holding` is always `ownership::surveyed`: an account or a card asked for is a chance, by the country's Global Findex shares and the persona's age, and many people have none. Call finance-generator directly with `ownership::asked` for a tester's guarantee of an account.
+- **Safe.** A persona has no `safe` of its own; set it on these requests.
+- **Off by default.** Each part draws from its own stream, so the rest of the persona is the same with and without it, and its data is loaded only by the first persona that asks. Pass your own instances through `psg::sources::identity` and `psg::sources::finance`. `load(tier)` does not reach them; call their own `load`.
 
 ## Migrating to v3
 

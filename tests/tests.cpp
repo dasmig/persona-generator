@@ -3,6 +3,8 @@
 
 #include <algorithm>
 #include <chrono>
+#include <format>
+#include <map>
 #include <set>
 #include <sstream>
 #include <string>
@@ -490,4 +492,229 @@ TEST_CASE("relations: known answer of 1,000 items", "[relations][kat]")
                          [&](std::uint64_t, const dasmig::persona& item)
                          { hash = dasmig::core::hash_combine(hash, dasmig::core::fnv1a64(item.to_json())); });
     REQUIRE(hash == 0xbcdc063f3a3c89b1ULL);
+}
+
+// ---------------------------------------------------------------------------
+// Papers and wallet
+// ---------------------------------------------------------------------------
+
+namespace
+{
+std::chrono::year_month_day born_on(const dasmig::persona& p)
+{
+    return std::chrono::year{p.birthday.year} / std::chrono::month{p.birthday.month} /
+           std::chrono::day{p.birthday.day};
+}
+
+// The JSON up to the signature, which the parts change.
+std::string without_signature(const std::string& json)
+{
+    return json.substr(0, json.rfind(",\"signature\":"));
+}
+
+dasmig::identity_request with_documents()
+{
+    dasmig::identity_request r;
+    r.documents = {dasmig::id_document_kind::passport};
+    return r;
+}
+
+dasmig::finance_request with_cards()
+{
+    dasmig::finance_request r;
+    r.cards = {std::nullopt};
+    r.card_numbers = dasmig::card_source::test_number;
+    return r;
+}
+} // namespace
+
+TEST_CASE("papers and a wallet are off by default and then change nothing", "[identity][finance]")
+{
+    const auto& gen = psg::instance();
+    const auto plain = gen.get_persona(request_for("BR"), seed_a);
+    REQUIRE_FALSE(plain.papers.has_value());
+    REQUIRE_FALSE(plain.wallet.has_value());
+    REQUIRE(plain.to_json().find("\"identity\"") == std::string::npos);
+    REQUIRE(plain.to_json().find("\"finance\"") == std::string::npos);
+}
+
+TEST_CASE("the papers are id-generator's for this persona", "[identity]")
+{
+    const auto& gen = psg::instance();
+    const auto& ids = dasmig::idg::instance();
+    for (std::uint64_t seed = 0; seed < 200; ++seed)
+    {
+        auto request = request_for("IT");
+        request.identity = with_documents();
+        const auto p = gen.get_persona(request, seed);
+        REQUIRE(p.papers.has_value());
+        REQUIRE(p.papers->country_code == "IT");
+        REQUIRE(p.papers->birth_date == born_on(p));
+        REQUIRE(p.papers->bio_sex == p.person_sex());
+        for (const auto& n : p.papers->numbers) REQUIRE(ids.is_valid(n.scheme, n.value));
+        REQUIRE(p.signature().data ==
+                dasmig::core::hash_combine(gen.get_persona(request_for("IT"), seed).signature().data, ids.data_hash()));
+    }
+}
+
+TEST_CASE("the city decides a number's place code", "[identity]")
+{
+    const auto& gen = psg::instance();
+    // Italy's code is the comune's: the same city gives the same code.
+    std::map<std::uint32_t, std::set<std::string>> codes;
+    auto request = request_for("IT");
+    request.identity = dasmig::identity_request{};
+    request.ages = dasmig::age_range{.min = 30, .max = 60};
+    for (std::uint64_t seed = 0; seed < 600; ++seed)
+    {
+        const auto p = gen.get_persona(request, seed);
+        if (p.papers->numbers.empty()) continue;
+        const auto& code = p.papers->numbers[0].place_code;
+        if (!code.empty()) codes[p.city_info.geonameid].insert(code);
+    }
+    REQUIRE(codes.size() > 20);
+    for (const auto& [city, seen] : codes) REQUIRE(seen.size() == 1);
+}
+
+TEST_CASE("the name reaches the documents", "[identity]")
+{
+    const auto& gen = psg::instance();
+    auto mexico = request_for("MX");
+    mexico.identity = with_documents();
+    mexico.ages = dasmig::age_range{.min = 30, .max = 60};
+    int two = 0;
+    for (std::uint64_t seed = 0; seed < 200 && two < 20; ++seed)
+    {
+        const auto p = gen.get_persona(mexico, seed);
+        if (p.papers->documents.empty()) continue;
+        const auto& line = p.papers->documents[0].mrz.front();
+        const auto surnames = line.substr(5, line.find("<<") - 5);
+        if (surnames.find('<') != std::string::npos) ++two;
+    }
+    REQUIRE(two >= 20);
+
+    auto iceland = request_for("IS");
+    iceland.identity = with_documents();
+    iceland.ages = dasmig::age_range{.min = 30, .max = 60};
+    const auto p = gen.get_persona(iceland, 3);
+    REQUIRE_FALSE(p.papers->documents.at(0).mrz.empty());
+}
+
+TEST_CASE("the wallet is finance-generator's and the survey decides who holds what", "[finance]")
+{
+    const auto& gen = psg::instance();
+    const auto& banks = dasmig::fng::instance();
+    const auto share_with_account = [&](const char* country) {
+        auto request = request_for(country);
+        request.ages = dasmig::age_range{.min = 25, .max = 60};
+        request.finance = dasmig::finance_request{};
+        int held = 0;
+        for (std::uint64_t seed = 0; seed < 400; ++seed)
+        {
+            const auto p = gen.get_persona(request, seed);
+            REQUIRE(p.wallet->birth_date == born_on(p));
+            for (const auto& a : p.wallet->accounts) REQUIRE(banks.is_valid(a.scheme, a.iban.empty() ? a.account_number : a.iban));
+            held += p.wallet->accounts.empty() ? 0 : 1;
+        }
+        return held;
+    };
+    // Far more Danes than Yemenis hold an account.
+    REQUIRE(share_with_account("DK") > 360);
+    REQUIRE(share_with_account("YE") < 100);
+
+    // `asked` in the request does not change that.
+    auto asked = request_for("YE");
+    asked.finance = dasmig::finance_request{};
+    asked.finance->holding = dasmig::ownership::asked;
+    auto left = request_for("YE");
+    left.finance = dasmig::finance_request{};
+    REQUIRE(gen.get_persona(asked, 3).to_json() == gen.get_persona(left, 3).to_json());
+}
+
+TEST_CASE("papers and a wallet change nothing else", "[identity][finance][replay]")
+{
+    const auto& gen = psg::instance();
+    for (std::uint64_t seed = 0; seed < 200; ++seed)
+    {
+        persona_request plain;
+        const auto p = gen.get_persona(plain, seed);
+        auto request = plain;
+        request.identity = with_documents();
+        request.finance = with_cards();
+        auto with = gen.get_persona(request, seed);
+        REQUIRE(with.papers.has_value());
+        REQUIRE(with.wallet.has_value());
+        with.papers.reset();
+        with.wallet.reset();
+        REQUIRE(without_signature(with.to_json()) == without_signature(p.to_json()));
+    }
+}
+
+TEST_CASE("every supported country can have papers and a wallet", "[identity][finance]")
+{
+    const auto& gen = psg::instance();
+    for (const auto code : psg::supported_countries())
+    {
+        auto request = request_for(std::string{code});
+        request.ages = dasmig::age_range{.min = 30, .max = 60};
+        request.identity = with_documents();
+        request.finance = with_cards();
+        const auto p = gen.get_persona(request, 21);
+        REQUIRE_FALSE(p.papers->documents.empty());
+    }
+}
+
+TEST_CASE("papers and a wallet in JSON come after the rest", "[identity][finance][output]")
+{
+    const auto& gen = psg::instance();
+    auto request = request_for("FR");
+    request.identity = with_documents();
+    request.finance = with_cards();
+    request.relations = dasmig::family_request{};
+    const auto json = gen.get_persona(request, 7).to_json();
+    const auto family = json.find("\"relatives\":{");
+    const auto identity = json.find("\"identity\":{");
+    const auto finance = json.find("\"finance\":{");
+    REQUIRE(family < identity);
+    REQUIRE(identity < finance);
+    REQUIRE(finance < json.rfind("\"signature\":"));
+}
+
+TEST_CASE("the parts come from the generator's own instances", "[identity][finance][loading]")
+{
+    dasmig::idg no_ids;
+    dasmig::fng no_banks;
+    const psg own{psg::sources{.identity = &no_ids, .finance = &no_banks}};
+    auto with = request_for("FR");
+    with.identity = dasmig::identity_request{};
+    REQUIRE_THROWS(own.get_persona(with, 1));
+    auto money = request_for("FR");
+    money.finance = dasmig::finance_request{};
+    REQUIRE_THROWS(own.get_persona(money, 1));
+    REQUIRE_NOTHROW(own.get_persona(request_for("FR"), 1));
+}
+
+TEST_CASE("known answers with papers and a wallet", "[identity][finance][kat]")
+{
+    const auto& gen = psg::instance();
+    auto request = request_for("BR");
+    request.person_sex = dasmig::sex::female;
+    request.ages = dasmig::age_range{.min = 30, .max = 40};
+    request.identity = with_documents();
+    request.finance = with_cards();
+    const auto p = gen.get_persona(request, seed_a);
+    REQUIRE(p.name == "Yasmin Tavares");
+    REQUIRE(p.papers->numbers.at(0).formatted == "754.149.568-98");
+    REQUIRE(p.papers->documents.at(0).mrz.at(0) == "P<BRATAVARES<<YASMIN<<<<<<<<<<<<<<<<<<<<<<<<");
+
+    std::uint64_t hash = 0xcbf29ce484222325ULL;
+    persona_request drawn;
+    drawn.identity = with_documents();
+    drawn.finance = with_cards();
+    for (std::uint64_t s = 0; s < 500; ++s)
+    {
+        hash = dasmig::core::hash_combine(hash, dasmig::core::fnv1a64(gen.get_persona(drawn, s).to_json()));
+    }
+    INFO(std::format("{:016x}", hash));
+    REQUIRE(hash == 0x8399413cc7658b44ULL);
 }
