@@ -26,6 +26,8 @@
 #include <dasmig/citygen.hpp>
 #include <dasmig/countrygen.hpp>
 #include <dasmig/entitygen.hpp>
+#include <dasmig/fingen.hpp>
+#include <dasmig/idgen.hpp>
 #include <dasmig/interestgen.hpp>
 #include <dasmig/namegen.hpp>
 #include <dasmig/occupationgen.hpp>
@@ -37,7 +39,7 @@
 /// @author Diego Dasso Migotto (diegomigotto at hotmail dot com)
 /// @see See doc/usage.md for the narrative tutorial.
 
-DASMIG_CORE_REQUIRE(1, 2);
+DASMIG_CORE_REQUIRE(1, 4);
 
 namespace dasmig
 {
@@ -79,6 +81,31 @@ struct persona_request
     /// is used as given. The family is drawn from its own seed, split from the
     /// persona's, so the rest of the persona is the same with and without it.
     std::optional<family_request> relations{}; // NOLINT(readability-redundant-member-init)
+
+    /// @brief Also draw the persona's national numbers and documents
+    ///        (id-generator). Unset by default, and then nothing about the
+    ///        persona changes.
+    ///
+    /// Its `country`, `birth_date`, `sex`, `given_names`, `surname`,
+    /// `second_surname`, `residence` and `reference_date` are replaced by the
+    /// persona's; the rest (`schemes`, `documents`, `birthplace`, `safe`,
+    /// `weighted`) is used as given. The city is the residence, and a birthplace
+    /// left unset is the same city. Drawn from its own seed, so the rest of the
+    /// persona is the same with and without it.
+    std::optional<identity_request> identity{}; // NOLINT(readability-redundant-member-init)
+
+    /// @brief Also draw the persona's bank accounts and payment cards
+    ///        (finance-generator). Unset by default, and then nothing about the
+    ///        persona changes.
+    ///
+    /// Its `country`, `birth_date`, `given_names`, `surname` and `reference_date`
+    /// are replaced by the persona's, and `holding` by `ownership::surveyed`: a
+    /// persona is meant to be believable, so what is asked for becomes a chance,
+    /// by the country's Global Findex shares, and many have no account. The rest
+    /// (`accounts`, `cards`, `card_numbers`, `network`, `safe`, `weighted`) is
+    /// used as given. Drawn from its own seed, so the rest of the persona is the
+    /// same with and without it.
+    std::optional<finance_request> finance{}; // NOLINT(readability-redundant-member-init)
 };
 
 /// @brief Return type for persona generation.
@@ -99,6 +126,8 @@ class persona
     dasmig::interest interests;     ///< Religion, hobbies and media.
     dasmig::occupation job;         ///< Employment status, education and job.
     std::optional<family> relatives{}; ///< The persona's family; set only when `persona_request::relations` was. // NOLINT(readability-redundant-member-init)
+    std::optional<dasmig::identity> papers{}; ///< National numbers and documents; set only when `persona_request::identity` was. // NOLINT(readability-redundant-member-init)
+    std::optional<dasmig::finance> wallet{};  ///< Bank accounts and payment cards; set only when `persona_request::finance` was. // NOLINT(readability-redundant-member-init)
 
     /// @brief Retrieve the random seed used to generate this persona.
     /// @return The call seed; pass it to get_persona(request, seed) with
@@ -107,7 +136,8 @@ class persona
 
     /// @brief The seed and the data this persona was generated from.
     /// @return The replay signature; `data` combines the data hashes of the
-    ///         eight libraries and the request.
+    ///         eight libraries and the request, and id-generator's and
+    ///         finance-generator's for a persona with those parts.
     [[nodiscard]] const core::seed_signature& signature() const
     {
         return _signature;
@@ -138,7 +168,8 @@ class persona
     /// Each library's result is written as that library writes it
     /// (`country`, `city`, `birth`, `biodata`, `personality`, `interest`,
     /// `occupation`), next to `name`, `sex`, `age`, `admin1` and `signature`,
-    /// and `relatives` (the family) when the request asked for it.
+    /// and `relatives` (the family), `identity` and `finance` when the request
+    /// asked for them.
     /// @param w Writer positioned where a value is allowed.
     void to_json(core::json_writer& w) const
     {
@@ -165,6 +196,16 @@ class persona
         {
             w.key("relatives");
             relatives->to_json(w);
+        }
+        if (papers)
+        {
+            w.key("identity");
+            papers->to_json(w);
+        }
+        if (wallet)
+        {
+            w.key("finance");
+            wallet->to_json(w);
         }
         w.key("signature");
         _signature.to_json(w);
@@ -236,6 +277,8 @@ class psg
         ocg* occupation{&ocg::instance()};   ///< Employment, education and jobs.
         trtg* trait{&trtg::instance()};      ///< Personality.
         relg* relationship{&relg::instance()}; ///< Family; used only when a request asks for relations.
+        idg* identity{nullptr}; ///< Numbers and documents, for persona_request::identity; null uses idg::instance(), loaded when a persona first asks.
+        fng* finance{nullptr};  ///< Accounts and cards, for persona_request::finance; null uses fng::instance(), loaded when a persona first asks.
     };
 
     /// @brief Draws from the singletons of the eight libraries.
@@ -395,6 +438,8 @@ class psg
             family.reference_date = request.reference_date;
             p.relatives = _from.relationship->get_family(family, core::rng{call_seed}.split("relations").seed());
         }
+        if (request.identity) add_identity_(*request.identity, request, named, p, call_seed);
+        if (request.finance) add_finance_(*request.finance, request, named, p, call_seed);
         return p;
     }
 
@@ -490,7 +535,64 @@ class psg
     {
         std::string full;
         person_name parts;
+        std::string surname;        // the first family name, or the patronymic where there is none
+        std::string second_surname; // the second of a double surname; empty for none
     };
+
+    static std::optional<std::string> given_(const std::string& text)
+    {
+        if (text.empty()) return std::nullopt;
+        return text;
+    }
+
+    // A parts' text with the role, joined as written.
+    static std::string part_of_(const name& n, name_role role)
+    {
+        std::string out;
+        for (std::size_t i = 0; i < n.parts().size(); ++i)
+        {
+            if (n.roles()[i] != role) continue;
+            if (!out.empty()) out.push_back(' ');
+            out += core::to_utf8(n.parts()[i]);
+        }
+        return out;
+    }
+
+    static std::chrono::year_month_day birth_date_(const persona& p)
+    {
+        return std::chrono::year{p.birthday.year} / std::chrono::month{p.birthday.month} /
+               std::chrono::day{p.birthday.day};
+    }
+
+    void add_identity_(identity_request ir, const persona_request& request, const named_& named, persona& p, std::uint64_t call_seed) const
+    {
+        const idg& source = _from.identity != nullptr ? *_from.identity : idg::instance();
+        ir.country = p.country_info.cca2;
+        ir.birth_date = birth_date_(p);
+        ir.sex = p.birthday.bio_sex;
+        ir.given_names = given_(named.parts.given);
+        ir.surname = given_(named.surname);
+        ir.second_surname = given_(named.second_surname);
+        ir.residence = id_place{.country_code = p.country_info.cca2,
+                                .admin1_code = p.city_info.admin1_code,
+                                .geonameid = p.city_info.geonameid};
+        ir.reference_date = request.reference_date;
+        p.papers = source.get_identity(ir, core::rng{call_seed}.split("identity").seed());
+        p._signature.data = core::hash_combine(p._signature.data, source.data_hash());
+    }
+
+    void add_finance_(finance_request fr, const persona_request& request, const named_& named, persona& p, std::uint64_t call_seed) const
+    {
+        const fng& source = _from.finance != nullptr ? *_from.finance : fng::instance();
+        fr.country = p.country_info.cca2;
+        fr.birth_date = birth_date_(p);
+        fr.given_names = given_(named.parts.given);
+        fr.surname = given_(named.parts.family.empty() ? named.parts.patronymic : named.parts.family);
+        fr.holding = ownership::surveyed;
+        fr.reference_date = request.reference_date;
+        p.wallet = source.get_finance(fr, core::rng{call_seed}.split("finance").seed());
+        p._signature.data = core::hash_combine(p._signature.data, source.data_hash());
+    }
 
     sources _from{};
     core::rng _engine{core::rng::from_entropy()};
@@ -600,10 +702,12 @@ class psg
                  const auto n = from.name->get_full_name(
                      {.gender = b.bio_sex == sex::female ? gender::f : gender::m, .culture = name_culture},
                      ctx.random()());
-                 return named_{core::to_utf8(static_cast<std::wstring>(n)),
-                               person_name{.given = core::to_utf8(n.given()),
-                                           .patronymic = core::to_utf8(n.patronymic()),
-                                           .family = core::to_utf8(n.family())}};
+                 return named_{.full = core::to_utf8(static_cast<std::wstring>(n)),
+                               .parts = person_name{.given = core::to_utf8(n.given()),
+                                                    .patronymic = core::to_utf8(n.patronymic()),
+                                                    .family = core::to_utf8(n.family())},
+                               .surname = n.family().empty() ? core::to_utf8(n.patronymic()) : part_of_(n, name_role::family),
+                               .second_surname = part_of_(n, name_role::family2)};
              });
 
         add_(L"traits", {}, from.trait, [from](const generation_context& ctx) {

@@ -75,10 +75,14 @@ Every field is optional. What is left out is drawn; what is given conditions the
 | `traits` | Number of personality traits, 0 to `personas.maxTraits` | 3 |
 | `referenceDate` | `'YYYY-MM-DD'` or a `Date` (its local date), 1900-2100 | `'2023-07-01'` |
 | `relations` | `true`, or `{ up, down, siblings, partners, names, stepparents, home }`: also draw the persona's family into `relatives` | none |
+| `identity` | `true` for the national numbers, or `{ documents: ['passport', 'id_card'] }` to add documents | none |
+| `finance` | `true` for one current account, or `{ accounts, cards, cardNumbers, network }`: a chance, by the country's Global Findex shares | none |
+| `safe` | `true` to make the numbers, documents, accounts and cards by the libraries' safe methods | `false` |
 | `seed` | A `bigint`, a non-negative safe integer, or a **hexadecimal** string | Random |
 
 - **Countries.** Only the countries in `personas.countries` have data in all eight libraries, so another code is an error rather than a persona with a name from the wrong culture.
 - **Traits.** Fewer traits than asked are returned when no other trait is compatible with those already chosen (traits in one group exclude each other).
+- **Papers and wallet.** Numbers, accounts and cards are test data. Without `safe` they are structurally valid and may match a real person's: never use them to identify anyone, to open accounts, to pass a check, or on a live payment system. See [the limits](https://github.com/dasmig/persona-generator#limits).
 - **Family.** `relations: true` adds `relatives`: the persona's parents, siblings, half-siblings, partners and children (`up: 2` adds grandparents, `down: 2` grandchildren), each with a name, birth date and, for the dead, a death date, linked by `edges`. `members[0]` is the persona. `stepparents: true` adds a parent's new partner (`stepfather`, `stepmother`, with a `step_parent_of` edge), the children the parent had with them (half-siblings) and their own children from before (`stepsibling`) and `home: true` adds `household`, who the persona lives with. Both are off by default. The family has its own seed stream, so the rest of the persona is identical with and without it.
 - **Dates.** The generator never reads the clock. Pass `referenceDate: new Date()` for ages as of today, and keep the date with the seed if the persona must replay.
 - **Seeds.** A seed is a 64-bit unsigned integer. A string is read as hexadecimal, optionally after `0x`, which is the form of `signature.seed`: `seed: '42'` is 0x42 (66), not 42. Use a `bigint` or a hexadecimal string for seeds above `Number.MAX_SAFE_INTEGER`.
@@ -117,7 +121,7 @@ pool.close();
 
 To recreate a persona later (for example, from a saved game), store its `signature.seed` and the request it was made with, including `referenceDate`.
 
-The same seed and request give the same persona **only with the same data**. `personas.dataHash` identifies the data of all eight libraries, and `personas.versions` lists the library versions the module was built from. Store `dataHash` with the seed: if a package update changes it, the saved seed gives a different persona.
+The same seed and request give the same persona **only with the same data**. `personas.dataHash` identifies the data of all eight libraries, `personas.identityDataHash` id-generator's, `personas.financeDataHash` finance-generator's, and `personas.versions` lists the library versions the module was built from. Store `dataHash` with the seed: if a package update changes it, the saved seed gives a different persona.
 
 Each part of a persona also has a `signature`, with its own seed and its library's data hash.
 
