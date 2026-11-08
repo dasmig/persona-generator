@@ -46,6 +46,7 @@ int main()
 | `relations` | unset | A `dasmig::family_request`: also draw the persona's family (see <a href="#relatives">Relatives</a>) |
 | `identity` | unset | A `dasmig::identity_request`: also draw the persona's numbers and documents (see <a href="#papers-and-wallet">Papers and Wallet</a>) |
 | `finance` | unset | A `dasmig::finance_request`: also draw the persona's accounts and cards (see <a href="#papers-and-wallet">Papers and Wallet</a>) |
+| `home` | unset | A `dasmig::property_request`: also draw the persona's home and its household's income (see <a href="#home">Home</a>) |
 
 ```cpp
 dasmig::persona_request request;
@@ -194,6 +195,28 @@ p.wallet->accounts;        // empty for someone the survey says holds none
 - **Who holds what.** A persona is meant to be believable, so `holding` is always `ownership::surveyed`: an account or a card asked for is a chance, by the country's Global Findex shares and the persona's age, and many people have none. Call finance-generator directly with `ownership::asked` for a tester's guarantee of an account.
 - **Safe.** A persona has no `safe` of its own; set it on these requests.
 - **Off by default.** Each part draws from its own stream, so the rest of the persona is the same with and without it, and its data is loaded only by the first persona that asks. Pass your own instances through `psg::sources::identity` and `psg::sources::finance`. `load(tier)` does not reach them; call their own `load`.
+
+## Home
+
+Set `request.home` to draw the persona's home with [property-generator](https://github.com/dasmig/property-generator): the dwelling type, the tenure, the rooms and bedrooms, the floor area, the year built and the monthly cost.
+
+```cpp
+persona_request request;
+request.country = "FR";
+request.relations = dasmig::family_request{};  // optional: the home then fits the family shown
+request.home = dasmig::property_request{};
+const auto p = psg::instance().get_persona(request);
+p.home->type;            // dasmig::dwelling_type::flat_large
+p.home->monthly_cost;    // rent, or the owner's mortgage and charges; none when nobody earns
+p.household_income;      // what everyone in the household earns a year
+p.home->in_building();   // a flat: ask address-generator for a unit (unit_chance = 1.0)
+```
+
+- **The household.** With `relations`, it is the family's: a request for both turns the family's `home` on, so `relatives->home` lists who lives there. Without `relations`, a household is drawn by relationship-generator for the home alone and not returned. Either way the home gets its type (`couple`, `nuclear`, ...), its size and the members under 18. For `other` (people who are not family live there too) the size is drawn. When the country's table has no household of that type and size, property-generator draws the type, then the size, then the children, so a home is always returned.
+- **The income.** `household_income` is what everyone aged 15 or more earns: the persona's job, and for each other member an occupation-generator draw by the country, their age and sex. It is unset when nobody earns (pensions and benefits are not modelled), and the home then has no cost. Counting every earner matters: with the persona's income alone, the median cost of a US home was 31% of income; with everyone's it is 19%.
+- **The reference person.** The persona, or the eldest member when the persona is under 16 or lives with its parents (property-generator's tenure depends on the reference person's age).
+- **What the persona fills in.** `country`, `place_population` (the city's, which sets city, town or rural), the household fields, `anchor_age`, `household_income` and `reference_date`. `area`, `type`, `holding` and `weighted` are used as given.
+- **Off by default.** The home draws from its own stream, so the rest of the persona is the same with and without it, except that `relatives` gains its household when both are asked. Its data is loaded by the first persona that asks; pass your own instance through `psg::sources::property`. The signature combines property-generator's and relationship-generator's data hashes.
 
 ## Migrating to v3
 

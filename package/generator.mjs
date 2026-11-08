@@ -4,12 +4,15 @@
 import { versions } from './versions.mjs';
 import { batchPlan, integer, malformed, outOfRange, seedText } from './batch.mjs';
 
-const keys = new Set(['country', 'sex', 'ages', 'traits', 'referenceDate', 'relations', 'identity', 'finance', 'safe', 'seed']);
+const keys = new Set(['country', 'sex', 'ages', 'traits', 'referenceDate', 'relations', 'identity', 'finance', 'safe', 'home', 'seed']);
 const documentKinds = new Set(['passport', 'id_card']);
 const accountKinds = new Set(['current', 'savings']);
 const cardKinds = new Set(['debit', 'credit', 'prepaid', 'any']);
 const cardSources = new Set(['network_range', 'test_number', 'wrong_check']);
 const sexes = new Set(['male', 'female']);
+const dwellingTypes = new Set(['detached', 'semi_detached', 'flat_small', 'flat_large', 'informal', 'other']);
+const tenures = new Set(['owner_outright', 'owner_mortgage', 'tenant_market', 'tenant_reduced']);
+const areas = new Set(['city', 'town', 'rural']);
 const relationKeys = new Set(['up', 'down', 'siblings', 'partners', 'names', 'stepparents', 'home']);
 
 function dateText(date) {
@@ -97,14 +100,33 @@ function parse(json) {
  * @param {Function} createModule The Emscripten factory (persona.mjs).
  * @param {object} moduleOptions Emscripten module options.
  */
+// The home option as the module's arguments: on, then the type, tenure and area to force.
+function homeArgs(home) {
+  if (home === undefined || home === false) return [0, '', '', ''];
+  if (home === true) return [1, '', '', ''];
+  if (home === null || typeof home !== 'object' || Array.isArray(home)) malformed('home must be a boolean or { type, tenure, area }');
+  const fields = { type: dwellingTypes, tenure: tenures, area: areas };
+  for (const key of Object.keys(home))
+    if (!(key in fields)) malformed(`unknown home field "${key}"; the fields are type, tenure, area`);
+  return [1, ...Object.entries(fields).map(([key, allowed]) => {
+    const value = home[key];
+    if (value === undefined) return '';
+    if (!allowed.has(value))
+      (typeof value === 'string' ? outOfRange : malformed)(`home.${key} must be one of ${[...allowed].join(', ')}, not ${JSON.stringify(value)}`);
+    return value;
+  })];
+}
+
 export async function createGenerator(createModule, moduleOptions) {
   const module = await createModule(moduleOptions);
   const generate = module.cwrap('dasmig_persona_generate', 'string',
     ['string', 'string', 'number', 'number', 'number', 'string', 'string',
-      'number', 'string', 'number', 'string', 'string', 'string', 'string', 'number', 'string']);
+      'number', 'string', 'number', 'string', 'string', 'string', 'string', 'number',
+      'number', 'string', 'string', 'string', 'string']);
   const generateBatchRaw = module.cwrap('dasmig_persona_generate_batch', 'string',
     ['string', 'string', 'number', 'number', 'number', 'string', 'string',
-      'number', 'string', 'number', 'string', 'string', 'string', 'string', 'number', 'string', 'number', 'number']);
+      'number', 'string', 'number', 'string', 'string', 'string', 'string', 'number',
+      'number', 'string', 'string', 'string', 'string', 'number', 'number']);
   const requestKeys = new Set([...keys].filter(key => key !== 'seed'));
   const info = parse(module.cwrap('dasmig_persona_info', 'string', [])());
   const countries = Object.freeze([...info.countries]);
@@ -115,7 +137,7 @@ export async function createGenerator(createModule, moduleOptions) {
     if (request === null || typeof request !== 'object' || Array.isArray(request)) malformed('must be an object');
     for (const key of Object.keys(request))
       if (!allowed.has(key)) malformed(`unknown field "${key}"; the fields are ${[...allowed].join(', ')}`);
-    const { country, sex, ages, traits, referenceDate, relations, identity, finance, safe } = request;
+    const { country, sex, ages, traits, referenceDate, relations, identity, finance, safe, home } = request;
 
     let code = '';
     if (country !== undefined) {
@@ -136,7 +158,7 @@ export async function createGenerator(createModule, moduleOptions) {
     const count = traits === undefined ? -1 : integer(traits, 'traits', 0, info.max_traits);
     if (safe !== undefined && typeof safe !== 'boolean') malformed('safe must be a boolean');
     return [code, sex ?? '', min, max, count, dateText(referenceDate), relationsText(relations),
-      ...identityArgs(identity), ...financeArgs(finance), safe ? 1 : 0];
+      ...identityArgs(identity), ...financeArgs(finance), safe ? 1 : 0, ...homeArgs(home)];
   }
 
   function generateJson(request = {}) {
@@ -156,6 +178,8 @@ export async function createGenerator(createModule, moduleOptions) {
     dataHash: info.data,
     identityDataHash: info.identity_data,
     financeDataHash: info.finance_data,
+    propertyDataHash: info.property_data,
+    relationshipDataHash: info.relationship_data,
     versions,
     generateJson(request) {
       const json = generateJson(request);
