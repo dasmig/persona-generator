@@ -718,3 +718,192 @@ TEST_CASE("known answers with papers and a wallet", "[identity][finance][kat]")
     INFO(std::format("{:016x}", hash));
     REQUIRE(hash == 0x8399413cc7658b44ULL);
 }
+
+// ---------------------------------------------------------------------------
+// Home (property-generator)
+// ---------------------------------------------------------------------------
+
+TEST_CASE("a home is off by default and then changes nothing", "[home]")
+{
+    const auto& gen = psg::instance();
+    const auto plain = gen.get_persona(request_for("DE"), seed_a);
+    REQUIRE_FALSE(plain.home.has_value());
+    REQUIRE_FALSE(plain.household_income.has_value());
+    REQUIRE(plain.to_json().find("\"home\"") == std::string::npos);
+    for (std::uint64_t seed = 0; seed < 200; ++seed)
+    {
+        persona_request request;
+        const auto p = gen.get_persona(request, seed);
+        request.home = dasmig::property_request{};
+        auto with = gen.get_persona(request, seed);
+        REQUIRE(with.home.has_value());
+        REQUIRE(with.home->country_code == p.country_info.cca2);
+        with.home.reset();
+        REQUIRE(without_signature(with.to_json()) == without_signature(p.to_json()));
+        REQUIRE(with.signature().data != p.signature().data);
+    }
+}
+
+TEST_CASE("the home's household is the family's", "[home][relations]")
+{
+    const auto& gen = psg::instance();
+    for (std::uint64_t seed = 0; seed < 300; ++seed)
+    {
+        auto request = request_for("FR");
+        request.relations = dasmig::family_request{};
+        request.home = dasmig::property_request{};
+        const auto p = gen.get_persona(request, seed);
+        REQUIRE(p.relatives->home.has_value()); // asked for by the home
+        const auto& household = *p.relatives->home;
+        const auto type = std::string{dasmig::household_type_name(household.type)};
+        if (household.type == dasmig::household_type::other) continue; // its size is drawn
+        // The size is kept; the type too, unless the country's table has no
+        // household of that type and size.
+        REQUIRE(p.home->household_size == household.members.size());
+    }
+}
+
+TEST_CASE("the household's income is everyone's earnings", "[home]")
+{
+    const auto& gen = psg::instance();
+    int alone = 0;
+    int more = 0;
+    for (std::uint64_t seed = 0; seed < 400; ++seed)
+    {
+        auto request = request_for("US");
+        request.ages = dasmig::age_range{.min = 25, .max = 60};
+        request.relations = dasmig::family_request{};
+        request.home = dasmig::property_request{};
+        const auto p = gen.get_persona(request, seed);
+        const auto own = p.job.income ? p.job.income->minor : 0;
+        const auto total = p.household_income ? p.household_income->minor : 0;
+        REQUIRE(total >= own);
+        REQUIRE(p.home->monthly_cost.has_value() == p.household_income.has_value());
+        if (p.household_income) REQUIRE(p.household_income->currency == "USD");
+        if (p.relatives->home->members.size() == 1)
+        {
+            REQUIRE(total == own);
+            ++alone;
+        }
+        else if (total > own)
+        {
+            ++more;
+        }
+    }
+    REQUIRE(alone > 20);
+    REQUIRE(more > 100); // partners and adult children earn too
+}
+
+TEST_CASE("a child's home is its parents'", "[home]")
+{
+    const auto& gen = psg::instance();
+    for (std::uint64_t seed = 0; seed < 100; ++seed)
+    {
+        auto request = request_for("IT");
+        request.ages = dasmig::age_range{.min = 2, .max = 12};
+        request.home = dasmig::property_request{};
+        const auto p = gen.get_persona(request, seed);
+        REQUIRE(p.home.has_value());
+        REQUIRE(p.home->household_size >= 2);
+        REQUIRE_FALSE(p.job.income.has_value());
+    }
+}
+
+TEST_CASE("the home request's own fields pass through", "[home]")
+{
+    const auto& gen = psg::instance();
+    auto request = request_for("ES");
+    request.home = dasmig::property_request{};
+    request.home->type = dasmig::dwelling_type::flat_large;
+    request.home->holding = dasmig::tenure::tenant_market;
+    request.home->country = "US";          // replaced by the persona's
+    request.home->anchor_age = 99;         // replaced too
+    for (std::uint64_t seed = 0; seed < 50; ++seed)
+    {
+        const auto p = gen.get_persona(request, seed);
+        REQUIRE(p.home->country_code == "ES");
+        REQUIRE(p.home->type == dasmig::dwelling_type::flat_large);
+        REQUIRE(p.home->holding == dasmig::tenure::tenant_market);
+        REQUIRE(p.home->in_building());
+        REQUIRE(gen.get_persona(request, seed).to_json() == p.to_json());
+    }
+}
+
+TEST_CASE("every supported country can have a home", "[home]")
+{
+    const auto& gen = psg::instance();
+    for (const auto code : psg::supported_countries())
+    {
+        auto request = request_for(std::string{code});
+        request.home = dasmig::property_request{};
+        request.relations = dasmig::family_request{.up = 1, .down = 2};
+        for (std::uint64_t seed = 0; seed < 40; ++seed)
+        {
+            const auto p = gen.get_persona(request, seed);
+            REQUIRE(p.home->country_code == code);
+        }
+    }
+}
+
+TEST_CASE("a home in JSON comes after the rest", "[home][output]")
+{
+    const auto& gen = psg::instance();
+    auto request = request_for("GB");
+    request.finance = with_cards();
+    request.home = dasmig::property_request{};
+    const auto json = gen.get_persona(request, 7).to_json();
+    const auto finance = json.find("\"finance\":{");
+    const auto home = json.find("\"home\":{");
+    const auto income = json.find("\"household_income\":");
+    REQUIRE(finance < home);
+    REQUIRE(home < income);
+    REQUIRE(income < json.rfind("\"signature\":"));
+}
+
+TEST_CASE("the home comes from the generator's own instance", "[home][loading]")
+{
+    dasmig::pty no_homes;
+    const psg own{psg::sources{.property = &no_homes}};
+    auto with = request_for("FR");
+    with.home = dasmig::property_request{};
+    REQUIRE_THROWS(own.get_persona(with, 1));
+    REQUIRE_NOTHROW(own.get_persona(request_for("FR"), 1));
+}
+
+TEST_CASE("a home: a persona batch with one is the same for any thread count", "[home][batch]")
+{
+    const auto& gen = psg::instance();
+    auto request = persona_request{};
+    request.home = dasmig::property_request{};
+    const auto one = gen.get_persona_batch(request, {.count = 200, .threads = 1}, 7);
+    const auto many = gen.get_persona_batch(request, {.count = 200, .threads = 4}, 7);
+    REQUIRE(one.size() == many.size());
+    for (std::size_t i = 0; i < one.size(); ++i) REQUIRE(one[i].to_json() == many[i].to_json());
+}
+
+TEST_CASE("known answers with a home", "[home][kat]")
+{
+    const auto& gen = psg::instance();
+    auto request = request_for("BR");
+    request.person_sex = dasmig::sex::female;
+    request.ages = dasmig::age_range{.min = 30, .max = 40};
+    request.home = dasmig::property_request{};
+    // The first seed whose household earns, so the home has a cost.
+    std::uint64_t seed = 0;
+    while (!gen.get_persona(request, seed).household_income) ++seed;
+    const auto p = gen.get_persona(request, seed);
+    INFO(p.to_json());
+    REQUIRE(seed == 0);
+    REQUIRE(p.home->to_string() == "BR, city, detached house, owner without a mortgage, 7 rooms (3 bedrooms), 188 m², built 2010, 176.47 BRL a month");
+    REQUIRE(p.household_income->decimal() == "32500.00");
+
+    std::uint64_t hash = 0xcbf29ce484222325ULL;
+    persona_request drawn;
+    drawn.home = dasmig::property_request{};
+    for (std::uint64_t s = 0; s < 500; ++s)
+    {
+        hash = dasmig::core::hash_combine(hash, dasmig::core::fnv1a64(gen.get_persona(drawn, s).to_json()));
+    }
+    INFO(std::format("{:016x}", hash));
+    REQUIRE(hash == 0xfea5e95f2245e209ULL);
+}

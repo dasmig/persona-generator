@@ -31,6 +31,7 @@
 #include <dasmig/interestgen.hpp>
 #include <dasmig/namegen.hpp>
 #include <dasmig/occupationgen.hpp>
+#include <dasmig/propertygen.hpp>
 #include <dasmig/relgen.hpp>
 #include <dasmig/traitgen.hpp>
 
@@ -106,6 +107,24 @@ struct persona_request
     /// used as given. Drawn from its own seed, so the rest of the persona is the
     /// same with and without it.
     std::optional<finance_request> finance{}; // NOLINT(readability-redundant-member-init)
+
+    /// @brief Also draw the persona's home (property-generator): the dwelling,
+    ///        its tenure, rooms, floor area, age and monthly cost. Unset by
+    ///        default, and then nothing about the persona changes.
+    ///
+    /// Its `country`, `place_population` (the city's), `household_type`,
+    /// `household_size`, `children`, `anchor_age`, `household_income` and
+    /// `reference_date` are replaced by the persona's; the rest (`area`,
+    /// `type`, `holding`, `weighted`) is used as given. The household is the
+    /// persona's family's (`relations`, whose `home` a request for both turns
+    /// on) or, without `relations`, one drawn by relationship-generator for the
+    /// home alone. Its income is what everyone in it aged 15 or more earns: the
+    /// persona's job, and an occupation-generator draw by country, age and sex
+    /// for each other member. The reference person is the persona, or its
+    /// eldest relative at home when the persona is under 16 or lives with its
+    /// parents. Drawn from its own seed, so the rest of the persona is the same
+    /// with and without it.
+    std::optional<property_request> home{}; // NOLINT(readability-redundant-member-init)
 };
 
 /// @brief Return type for persona generation.
@@ -128,6 +147,8 @@ class persona
     std::optional<family> relatives{}; ///< The persona's family; set only when `persona_request::relations` was. // NOLINT(readability-redundant-member-init)
     std::optional<dasmig::identity> papers{}; ///< National numbers and documents; set only when `persona_request::identity` was. // NOLINT(readability-redundant-member-init)
     std::optional<dasmig::finance> wallet{};  ///< Bank accounts and payment cards; set only when `persona_request::finance` was. // NOLINT(readability-redundant-member-init)
+    std::optional<dasmig::property> home{};   ///< The home; set only when `persona_request::home` was. // NOLINT(readability-redundant-member-init)
+    std::optional<core::money> household_income{}; ///< Gross annual earnings of the home's household, which its monthly cost is drawn from; set with `home` when someone in it earns. // NOLINT(readability-redundant-member-init)
 
     /// @brief Retrieve the random seed used to generate this persona.
     /// @return The call seed; pass it to get_persona(request, seed) with
@@ -136,8 +157,9 @@ class persona
 
     /// @brief The seed and the data this persona was generated from.
     /// @return The replay signature; `data` combines the data hashes of the
-    ///         eight libraries and the request, and id-generator's and
-    ///         finance-generator's for a persona with those parts.
+    ///         eight libraries and the request, and id-generator's,
+    ///         finance-generator's, and property-generator's and
+    ///         relationship-generator's for a persona with those parts.
     [[nodiscard]] const core::seed_signature& signature() const
     {
         return _signature;
@@ -168,8 +190,8 @@ class persona
     /// Each library's result is written as that library writes it
     /// (`country`, `city`, `birth`, `biodata`, `personality`, `interest`,
     /// `occupation`), next to `name`, `sex`, `age`, `admin1` and `signature`,
-    /// and `relatives` (the family), `identity` and `finance` when the request
-    /// asked for them.
+    /// and `relatives` (the family), `identity`, `finance`, and `home` with
+    /// `household_income` when the request asked for them.
     /// @param w Writer positioned where a value is allowed.
     void to_json(core::json_writer& w) const
     {
@@ -206,6 +228,14 @@ class persona
         {
             w.key("finance");
             wallet->to_json(w);
+        }
+        if (home)
+        {
+            w.key("home");
+            home->to_json(w);
+            w.key("household_income");
+            if (household_income) household_income->write_json(w);
+            else w.value(nullptr);
         }
         w.key("signature");
         _signature.to_json(w);
@@ -279,6 +309,7 @@ class psg
         relg* relationship{&relg::instance()}; ///< Family; used only when a request asks for relations.
         idg* identity{nullptr}; ///< Numbers and documents, for persona_request::identity; null uses idg::instance(), loaded when a persona first asks.
         fng* finance{nullptr};  ///< Accounts and cards, for persona_request::finance; null uses fng::instance(), loaded when a persona first asks.
+        pty* property{nullptr}; ///< Homes, for persona_request::home; null uses pty::instance(), loaded when a persona first asks.
     };
 
     /// @brief Draws from the singletons of the eight libraries.
@@ -407,7 +438,7 @@ class psg
             + static_cast<std::int64_t>(static_cast<unsigned>(request.reference_date.day()));
         er.inputs["traits"] = static_cast<std::int64_t>(request.traits);
 
-        if (request.relations && !_from.relationship->has_family_data())
+        if ((request.relations || request.home) && !_from.relationship->has_family_data())
             throw std::runtime_error("persona-generator: relationship-generator has no data loaded");
 
         const auto e = _pipeline.generate(er, call_seed);
@@ -428,18 +459,15 @@ class psg
         if (request.relations)
         {
             auto family = *request.relations;
-            family.anchor = anchor_spec{.country_code = p.country_info.cca2,
-                                        .bio_sex = p.birthday.bio_sex,
-                                        .birth = std::chrono::year_month_day{
-                                            std::chrono::year{p.birthday.year},
-                                            std::chrono::month{p.birthday.month},
-                                            std::chrono::day{p.birthday.day}},
-                                        .name = named.parts};
+            family.anchor = anchor_of_(p, named);
             family.reference_date = request.reference_date;
+            // A home needs the household, which is drawn from its own stream.
+            if (request.home) family.home = true;
             p.relatives = _from.relationship->get_family(family, core::rng{call_seed}.split("relations").seed());
         }
         if (request.identity) add_identity_(*request.identity, request, named, p, call_seed);
         if (request.finance) add_finance_(*request.finance, request, named, p, call_seed);
+        if (request.home) add_home_(*request.home, request, named, p, call_seed);
         return p;
     }
 
@@ -558,6 +586,14 @@ class psg
         return out;
     }
 
+    static anchor_spec anchor_of_(const persona& p, const named_& named)
+    {
+        return anchor_spec{.country_code = p.country_info.cca2,
+                           .bio_sex = p.birthday.bio_sex,
+                           .birth = birth_date_(p),
+                           .name = named.parts};
+    }
+
     static std::chrono::year_month_day birth_date_(const persona& p)
     {
         return std::chrono::year{p.birthday.year} / std::chrono::month{p.birthday.month} /
@@ -593,6 +629,107 @@ class psg
         p.wallet = source.get_finance(fr, core::rng{call_seed}.split("finance").seed());
         p._signature.data = core::hash_combine(p._signature.data, source.data_hash());
     }
+
+    static void add_money_(std::optional<core::money>& total, const std::optional<core::money>& part)
+    {
+        if (!part || part->minor <= 0) return;
+        if (!total)
+        {
+            total = part;
+            return;
+        }
+        if (part->currency != total->currency || part->digits != total->digits) return;
+        total = core::money::from_minor(total->minor + part->minor, total->currency, total->digits);
+    }
+
+    // The household's earnings: the persona's job, and a draw from
+    // occupation-generator for each other member of working age.
+    [[nodiscard]] std::optional<core::money> household_income_(const family& fam, const persona& p,
+                                                               const core::rng& seeds) const
+    {
+        std::optional<core::money> total;
+        add_money_(total, p.job.income);
+        const auto earners = seeds.split("earners").seed();
+        for (const auto id : fam.home->members)
+        {
+            const auto& m = fam.members.at(id);
+            if (id == 0 || m.age < earning_age_) continue;
+            occupation_request r;
+            r.country = p.country_info.cca2;
+            r.age = m.age;
+            r.person_sex = m.bio_sex;
+            add_money_(total, _from.occupation->get_occupation(r, core::item_seed(earners, id)).income);
+        }
+        return total;
+    }
+
+    void add_home_(property_request hr, const persona_request& request, const named_& named, persona& p,
+                   std::uint64_t call_seed) const
+    {
+        const pty& source = _from.property != nullptr ? *_from.property : pty::instance();
+        const auto seeds = core::rng{call_seed}.split("home");
+
+        // The family's household, or one drawn for the home alone.
+        std::optional<family> own;
+        const family* fam = p.relatives && p.relatives->home ? &*p.relatives : nullptr;
+        if (fam == nullptr)
+        {
+            family_request fr;
+            fr.anchor = anchor_of_(p, named);
+            fr.reference_date = request.reference_date;
+            fr.names = false;
+            fr.home = true;
+            own = _from.relationship->get_family(fr, seeds.split("household").seed());
+            fam = &*own;
+        }
+        const auto& household = *fam->home;
+        std::uint8_t children = 0;
+        unsigned eldest = 0;
+        for (const auto id : household.members)
+        {
+            const auto age = fam->members.at(id).age;
+            if (age < 18) ++children;
+            eldest = std::max<unsigned>(eldest, age);
+        }
+
+        hr.country = p.country_info.cca2;
+        hr.place_population = p.city_info.population;
+        hr.household_type = std::string{household_type_name(household.type)};
+        // `other`: people who are not family live there too, so the size is drawn.
+        if (household.type == household_type::other) hr.household_size.reset();
+        else hr.household_size = static_cast<std::uint8_t>(std::min<std::size_t>(household.members.size(), 255));
+        hr.children = children;
+        const bool elder = p.age() < 16 || household.type == household_type::with_parents;
+        hr.anchor_age = static_cast<std::uint8_t>(std::clamp<unsigned>(elder ? eldest : p.age(), 16, 110));
+        p.household_income = household_income_(*fam, p, seeds);
+        hr.household_income = p.household_income;
+        hr.reference_date = request.reference_date;
+
+        const auto seed = seeds.split("property").seed();
+        // The country's table may have no household like the family's (a
+        // couple with a partner under 18, more people than any household it
+        // records): the type is then drawn, then the size, then the children.
+        // A request that fails without them is the caller's, and throws.
+        while (true)
+        {
+            try
+            {
+                p.home = source.get_property(hr, seed);
+                break;
+            }
+            catch (const std::invalid_argument&)
+            {
+                if (hr.household_type) hr.household_type.reset();
+                else if (hr.household_size) hr.household_size.reset();
+                else if (hr.children) hr.children.reset();
+                else throw;
+            }
+        }
+        p._signature.data = core::hash_combine(p._signature.data, source.data_hash());
+        p._signature.data = core::hash_combine(p._signature.data, _from.relationship->data_hash());
+    }
+
+    static constexpr unsigned earning_age_ = 15;
 
     sources _from{};
     core::rng _engine{core::rng::from_entropy()};

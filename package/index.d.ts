@@ -119,6 +119,18 @@ export interface PersonaRequest {
   /** Make the numbers, documents, accounts and cards by the libraries' safe methods. Default false. */
   safe?: boolean;
   /**
+   * Add `home`, the persona's home (property-generator): its dwelling type, tenure, rooms, floor area,
+   * year built and monthly cost, and `household_income`, what everyone in the household earns. `true`
+   * draws everything; an object forces the type, the tenure or the area. The household is the family's
+   * when `relations` is asked (and its `home` is then on), otherwise one drawn for the home alone.
+   * Unset, nothing about the persona changes.
+   */
+  home?: boolean | {
+    type?: DwellingType;
+    tenure?: Tenure;
+    area?: 'city' | 'town' | 'rural';
+  };
+  /**
    * The call seed, a 64-bit unsigned integer: a bigint, a non-negative safe integer, or a string
    * of 1-16 **hexadecimal** digits with an optional `0x` (so `'42'` is 0x42, not 42), the form of
    * `signature.seed`. Unset draws a random one. The same seed, request and data give the same persona.
@@ -309,6 +321,32 @@ export interface Occupation {
   signature: Signature;
 }
 
+/** property-generator's dwelling types. */
+export type DwellingType = 'detached' | 'semi_detached' | 'flat_small' | 'flat_large' | 'informal' | 'other';
+/** property-generator's tenures. */
+export type Tenure = 'owner_outright' | 'owner_mortgage' | 'tenant_market' | 'tenant_reduced';
+
+/** The home, as property-generator writes it. */
+export interface Home {
+  country_code: string;
+  area: 'city' | 'town' | 'rural';
+  household_type: 'one_person' | 'couple' | 'nuclear' | 'single_parent' | 'with_parents' | 'multi_generation' | 'other';
+  household_size: number;
+  type: DwellingType;
+  holding: Tenure;
+  /** Habitable rooms, the kitchen counted, bathrooms not. */
+  rooms: number;
+  bedrooms: number;
+  /** Square metres. */
+  floor_area: number;
+  year_built: number;
+  /** Rent, or the owner's mortgage and charges, a month; null without a household income. */
+  monthly_cost: Money | null;
+  /** The weakest evidence of the fields drawn. */
+  evidence: 'measured' | 'modelled' | 'filled';
+  signature: Signature;
+}
+
 /** One persona: each library's result, as that library writes it. */
 export interface Persona {
   name: string;
@@ -329,6 +367,10 @@ export interface Persona {
   identity?: { country_code: string; birth_date: string; sex: Sex; numbers: Record<string, any>[]; documents: Record<string, any>[]; signature: Signature };
   /** Only with `finance`; as finance-generator writes it. */
   finance?: { country_code: string; birth_date: string; accounts: Record<string, any>[]; cards: Record<string, any>[]; signature: Signature };
+  /** Only with `home`; as property-generator writes it. */
+  home?: Home;
+  /** Only with `home`: the household's gross annual earnings, which the home's cost is drawn from; null when nobody in it earns. */
+  household_income?: Money | null;
   /** `generate({ ...request, seed: persona.signature.seed })` replays this persona. */
   signature: Signature;
 }
@@ -343,6 +385,14 @@ export interface PersonaGenerator {
    * only while this is unchanged; it changes when a package update changes any library's data.
    */
   readonly dataHash: string;
+  /** id-generator's data hash, combined into the signature of a persona with `identity`. */
+  readonly identityDataHash: string;
+  /** finance-generator's data hash, combined into the signature of a persona with `finance`. */
+  readonly financeDataHash: string;
+  /** property-generator's data hash, combined into the signature of a persona with `home`. */
+  readonly propertyDataHash: string;
+  /** relationship-generator's data hash, combined after property-generator's for a persona with `home`. */
+  readonly relationshipDataHash: string;
   /** The library versions (git tags) this module was built from. */
   readonly versions: Readonly<Record<string, string>>;
   /**

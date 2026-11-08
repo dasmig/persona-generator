@@ -10,6 +10,7 @@
 #include <emscripten/emscripten.h>
 #include "support.hpp"
 
+#include <array>
 #include <charconv>
 #include <cmath>
 #include <exception>
@@ -98,6 +99,36 @@ void add_parts(dasmig::persona_request& request, int identity, std::string_view 
     }
 }
 
+// The value whose name is `text`, from a list of names in the enum's order.
+template <typename E, std::size_t N>
+E named(std::string_view text, const std::array<std::string_view, N>& names, const char* what)
+{
+    for (std::size_t i = 0; i < N; ++i)
+        if (names[i] == text) return static_cast<E>(i);
+    throw std::invalid_argument(what);
+}
+
+// The home the C API's arguments describe; "" leaves a field to be drawn.
+void add_home(dasmig::persona_request& request, int home, std::string_view type, std::string_view tenure,
+              std::string_view area)
+{
+    if (home == 0) return;
+    static constexpr std::array<std::string_view, 6> types{"detached",   "semi_detached", "flat_small",
+                                                           "flat_large", "informal",      "other"};
+    static constexpr std::array<std::string_view, 4> tenures{"owner_outright", "owner_mortgage", "tenant_market",
+                                                             "tenant_reduced"};
+    static constexpr std::array<std::string_view, 3> areas{"city", "town", "rural"};
+    dasmig::property_request h;
+    if (!type.empty())
+        h.type = named<dasmig::dwelling_type>(type, types, "a home type must be detached, semi_detached, flat_small, "
+                                                           "flat_large, informal or other");
+    if (!tenure.empty())
+        h.holding = named<dasmig::tenure>(tenure, tenures, "a tenure must be owner_outright, owner_mortgage, "
+                                                           "tenant_market or tenant_reduced");
+    if (!area.empty()) h.area = named<dasmig::settlement>(area, areas, "an area must be city, town or rural");
+    request.home = h;
+}
+
 // The request the C API's string and number arguments describe; "" and -1
 // leave a choice to the generator. `relations` is the family: "" for none,
 // otherwise "up,down,flags" with the generations above and below (0 to 2) and
@@ -105,7 +136,8 @@ void add_parts(dasmig::persona_request& request, int identity, std::string_view 
 dasmig::persona_request make_request(const char* country, const char* sex, int age_min, int age_max, int traits,
                                      const char* reference_date, const char* relations, int identity,
                                      const char* documents, int finance, const char* accounts, const char* cards,
-                                     const char* card_numbers, const char* network, int safe)
+                                     const char* card_numbers, const char* network, int safe, int home,
+                                     const char* home_type, const char* home_tenure, const char* home_area)
 {
     dasmig::persona_request request;
     if (*country != '\0') request.country = country;
@@ -148,6 +180,7 @@ dasmig::persona_request make_request(const char* country, const char* sex, int a
         request.relations = family;
     }
     add_parts(request, identity, documents, finance, accounts, cards, card_numbers, network, safe);
+    add_home(request, home, home_type, home_tenure, home_area);
     return request;
 }
 
@@ -177,6 +210,10 @@ extern "C"
 ///        the library's default.
 /// @param network A card network ("visa"), or "" to draw it.
 /// @param safe Non-zero for papers and a wallet by the libraries' safe methods.
+/// @param home Non-zero to add the home (persona_request::home), under `home`
+///        with `household_income`.
+/// @param home_type, home_tenure, home_area The dwelling type, tenure and area
+///        to force (property-generator's names), or "" to draw them.
 /// @param seed 1 to 16 hexadecimal digits, or "" for a random seed (the
 ///        persona's signature has the seed that replays it).
 EMSCRIPTEN_KEEPALIVE const char* dasmig_persona_generate(const char* country, const char* sex, int age_min,
@@ -184,13 +221,15 @@ EMSCRIPTEN_KEEPALIVE const char* dasmig_persona_generate(const char* country, co
                                                          const char* relations, int identity, const char* documents,
                                                          int finance, const char* accounts, const char* cards,
                                                          const char* card_numbers, const char* network, int safe,
-                                                         const char* seed)
+                                                         int home, const char* home_type, const char* home_tenure,
+                                                         const char* home_area, const char* seed)
 {
     try
     {
         load_once();
         const auto request = make_request(country, sex, age_min, age_max, traits, reference_date, relations, identity,
-                                          documents, finance, accounts, cards, card_numbers, network, safe);
+                                          documents, finance, accounts, cards, card_numbers, network, safe, home,
+                                          home_type, home_tenure, home_area);
 
         auto& generator = dasmig::psg::instance();
         return reply(*seed == '\0' ? generator.get_persona(request).to_json()
@@ -215,6 +254,8 @@ EMSCRIPTEN_KEEPALIVE const char* dasmig_persona_generate_batch(const char* count
                                                                int identity, const char* documents, int finance,
                                                                const char* accounts, const char* cards,
                                                                const char* card_numbers, const char* network, int safe,
+                                                               int home, const char* home_type,
+                                                               const char* home_tenure, const char* home_area,
                                                                const char* seed,
                                                                double first, int count)
 {
@@ -222,7 +263,8 @@ EMSCRIPTEN_KEEPALIVE const char* dasmig_persona_generate_batch(const char* count
     {
         load_once();
         const auto request = make_request(country, sex, age_min, age_max, traits, reference_date, relations, identity,
-                                          documents, finance, accounts, cards, card_numbers, network, safe);
+                                          documents, finance, accounts, cards, card_numbers, network, safe, home,
+                                          home_type, home_tenure, home_area);
         if (*seed == '\0') throw std::invalid_argument("a batch needs a seed");
         if (count < 0) throw std::invalid_argument("count must not be negative");
         if (!(first >= 0.0 && first <= 9007199254740991.0) || first != std::floor(first))
@@ -244,9 +286,10 @@ EMSCRIPTEN_KEEPALIVE const char* dasmig_persona_generate_batch(const char* count
 
 /// @brief What this module can generate: the supported countries, the trait
 ///        catalogue's size (the most traits a request can ask for), the
-///        hash of the eight libraries' data, and id-generator's and
-///        finance-generator's, combined in that order into the signature of a
-///        persona with those parts.
+///        hash of the eight libraries' data, and id-generator's,
+///        finance-generator's, and property-generator's and
+///        relationship-generator's, combined in that order into the signature
+///        of a persona with those parts.
 EMSCRIPTEN_KEEPALIVE const char* dasmig_persona_info()
 {
     try
@@ -260,6 +303,8 @@ EMSCRIPTEN_KEEPALIVE const char* dasmig_persona_info()
             .field("data", hex(dasmig::psg::instance().data_hash()))
             .field("identity_data", hex(dasmig::idg::instance().data_hash()))
             .field("finance_data", hex(dasmig::fng::instance().data_hash()))
+            .field("property_data", hex(dasmig::pty::instance().data_hash()))
+            .field("relationship_data", hex(dasmig::relg::instance().data_hash()))
             .end_object();
         return reply(w.str());
     }

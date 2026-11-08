@@ -29,8 +29,10 @@ assert.equal(personas.dataHash, '3229071c54eee6bf');
 assert.equal(personas.maxTraits, 52);
 assert.equal(personas.identityDataHash, '14750e64ceb541ac');
 assert.equal(personas.financeDataHash, '2ef270849d0c325c');
+assert.equal(personas.propertyDataHash, '4a55196d601f537d');
+assert.equal(personas.relationshipDataHash, 'a4516485553c1cc1');
 assert.equal(personas.versions['persona-generator'].startsWith('v'), true, JSON.stringify(personas.versions));
-assert.equal(Object.keys(personas.versions).length, 13);
+assert.equal(Object.keys(personas.versions).length, 14);
 assert.ok(Object.isFrozen(personas) && Object.isFrozen(personas.countries));
 
 // Known answers.
@@ -112,6 +114,35 @@ for (const [request, type, pattern] of [
   [{ finance: { accounts: ['pension'] } }, RangeError, /finance.accounts must hold/],
   [{ finance: { holding: 'asked' } }, TypeError, /unknown finance field/],
   [{ safe: 'yes' }, TypeError, /safe must be a boolean/],
+]) assert.throws(() => personas.generate(request), type, JSON.stringify(request));
+
+// A home: off by default, and nothing else changes when it is on.
+const homeRequest = { country: 'BR', sex: 'female', ages: { min: 30, max: 40 }, home: true };
+const housed = personas.generate({ ...homeRequest, seed: 0 });
+assert.deepEqual([housed.home.household_type, housed.home.household_size], ['nuclear', 4]);
+assert.equal(housed.home.type, 'detached');
+assert.equal(housed.home.holding, 'owner_outright');
+assert.deepEqual([housed.home.rooms, housed.home.bedrooms, housed.home.floor_area, housed.home.year_built], [7, 3, 188, 2010]);
+assert.deepEqual(housed.home.monthly_cost, { amount: 176.47, currency: 'BRL' });
+assert.deepEqual(housed.household_income, { amount: 32500, currency: 'BRL' });
+const { home: h_, household_income: hi_, signature: hs_, ...withoutHome } = housed;
+const { signature: hs2_, ...unhoused } = personas.generate({ ...homeRequest, home: undefined, seed: 0 });
+assert.deepEqual(withoutHome, unhoused);
+const flat = personas.generate({ country: 'ES', home: { type: 'flat_large', tenure: 'tenant_market', area: 'city' }, seed: 3 });
+assert.deepEqual([flat.home.type, flat.home.holding, flat.home.area], ['flat_large', 'tenant_market', 'city']);
+const family = personas.generate({ country: 'FR', relations: true, home: true, seed: 5 });
+assert.ok(family.relatives.household, 'a home turns the household of the family on');
+hash = 0xcbf29ce484222325n;
+for (let s = 0; s < 500; ++s) {
+  const json = personas.generateJson({ home: true, seed: s }).replace(/"admin1":"(?:[^"\\]|\\.)*"/, '"admin1":""');
+  for (const byte of encoder.encode(json)) hash = ((hash ^ BigInt(byte)) * 0x100000001b3n) & mask;
+}
+assert.equal(hash.toString(16), '8e869e82242db820');
+for (const [request, type, pattern] of [
+  [{ home: 'yes' }, TypeError, /home must be a boolean/],
+  [{ home: { type: 'castle' } }, RangeError, /home.type must be one of/],
+  [{ home: { tenure: 3 } }, TypeError, /home.tenure must be one of/],
+  [{ home: { rooms: 3 } }, TypeError, /unknown home field/],
 ]) assert.throws(() => personas.generate(request), type, JSON.stringify(request));
 
 // Admin1 names are embedded.
