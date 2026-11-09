@@ -29,7 +29,7 @@ assert.equal(personas.dataHash, '3229071c54eee6bf');
 assert.equal(personas.maxTraits, 52);
 assert.equal(personas.identityDataHash, '14750e64ceb541ac');
 assert.equal(personas.financeDataHash, '2ef270849d0c325c');
-assert.equal(personas.propertyDataHash, '4a55196d601f537d');
+assert.equal(personas.propertyDataHash, 'df6af68d1dd6d658');
 assert.equal(personas.relationshipDataHash, 'a4516485553c1cc1');
 assert.equal(personas.versions['persona-generator'].startsWith('v'), true, JSON.stringify(personas.versions));
 assert.equal(Object.keys(personas.versions).length, 14);
@@ -122,7 +122,7 @@ const housed = personas.generate({ ...homeRequest, seed: 0 });
 assert.deepEqual([housed.home.household_type, housed.home.household_size], ['nuclear', 4]);
 assert.equal(housed.home.type, 'detached');
 assert.equal(housed.home.holding, 'owner_outright');
-assert.deepEqual([housed.home.rooms, housed.home.bedrooms, housed.home.floor_area, housed.home.year_built], [7, 3, 188, 2010]);
+assert.deepEqual([housed.home.rooms, housed.home.bedrooms, housed.home.floor_area, housed.home.year_built], [7, 3, 173, 2010]);
 assert.deepEqual(housed.home.monthly_cost, { amount: 176.47, currency: 'BRL' });
 assert.deepEqual(housed.household_income, { amount: 32500, currency: 'BRL' });
 const { home: h_, household_income: hi_, signature: hs_, ...withoutHome } = housed;
@@ -137,7 +137,7 @@ for (let s = 0; s < 500; ++s) {
   const json = personas.generateJson({ home: true, seed: s }).replace(/"admin1":"(?:[^"\\]|\\.)*"/, '"admin1":""');
   for (const byte of encoder.encode(json)) hash = ((hash ^ BigInt(byte)) * 0x100000001b3n) & mask;
 }
-assert.equal(hash.toString(16), '8e869e82242db820');
+assert.equal(hash.toString(16), '4b9fb28eb3661aa8');
 for (const [request, type, pattern] of [
   [{ home: 'yes' }, TypeError, /home must be a boolean/],
   [{ home: { type: 'castle' } }, RangeError, /home.type must be one of/],
