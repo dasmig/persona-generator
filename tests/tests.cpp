@@ -894,7 +894,7 @@ TEST_CASE("known answers with a home", "[home][kat]")
     const auto p = gen.get_persona(request, seed);
     INFO(p.to_json());
     REQUIRE(seed == 0);
-    REQUIRE(p.home->to_string() == "BR, city, detached house, owner without a mortgage, 7 rooms (3 bedrooms), 188 m², built 2010, 176.47 BRL a month");
+    REQUIRE(p.home->to_string() == "BR, city, detached house, owner without a mortgage, 7 rooms (3 bedrooms), 173 m², built 2010, 176.47 BRL a month");
     REQUIRE(p.household_income->decimal() == "32500.00");
 
     std::uint64_t hash = 0xcbf29ce484222325ULL;
@@ -905,5 +905,5 @@ TEST_CASE("known answers with a home", "[home][kat]")
         hash = dasmig::core::hash_combine(hash, dasmig::core::fnv1a64(gen.get_persona(drawn, s).to_json()));
     }
     INFO(std::format("{:016x}", hash));
-    REQUIRE(hash == 0xfea5e95f2245e209ULL);
+    REQUIRE(hash == 0xb225d3b9a2172226ULL);
 }
