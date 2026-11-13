@@ -47,6 +47,7 @@ int main()
 | `identity` | unset | A `dasmig::identity_request`: also draw the persona's numbers and documents (see <a href="#papers-and-wallet">Papers and Wallet</a>) |
 | `finance` | unset | A `dasmig::finance_request`: also draw the persona's accounts and cards (see <a href="#papers-and-wallet">Papers and Wallet</a>) |
 | `home` | unset | A `dasmig::property_request`: also draw the persona's home and its household's income (see <a href="#home">Home</a>) |
+| `employer` | unset | A `dasmig::company_request`: also draw the company the persona works for (see <a href="#employer">Employer</a>) |
 
 ```cpp
 dasmig::persona_request request;
@@ -217,6 +218,28 @@ p.home->in_building();   // a flat: ask address-generator for a unit (unit_chanc
 - **The reference person.** The persona, or the eldest member when the persona is under 16 or lives with its parents (property-generator's tenure depends on the reference person's age).
 - **What the persona fills in.** `country`, `place_population` (the city's, which sets city, town or rural), the household fields, `anchor_age`, `household_income` and `reference_date`. `area`, `type`, `holding` and `weighted` are used as given.
 - **Off by default.** The home draws from its own stream, so the rest of the persona is the same with and without it, except that `relatives` gains its household when both are asked. Its data is loaded by the first persona that asks; pass your own instance through `psg::sources::property`. The signature combines property-generator's and relationship-generator's data hashes.
+
+## Employer
+
+Set `request.employer` to draw the company the persona works for with [company-generator](https://github.com/dasmig/company-generator): its name, industry, size, legal form, founding date, registration numbers and domain.
+
+```cpp
+persona_request request;
+request.country = "DE";
+request.employer = dasmig::company_request{};
+const auto p = psg::instance().get_persona(request, 2);
+p.job.job->label;        // "Crop farmer"
+p.employer->name;        // "Erste Stadt eG"
+p.employer->employees;   // 365
+p.employer->domain;      // "erste-stadt.de"
+```
+
+- **Drawn by staff.** A business counts for its persons employed (`company_weight::employment`), so a persona is likelier to work for a large firm than the register's mix of mostly micro firms would give.
+- **Fits the job.** The industry is one that employs the persona's occupation, by the country's employment by occupation and activity (`occupation_isco` is the job's ISCO group): a farm worker works in agriculture, a clerk is spread over services.
+- **Employed only.** A persona who is a student, retired, unemployed or inactive has no employer, whatever the request: `employer` is unset, and written as `null` in JSON when it was asked for.
+- **What the persona fills in.** `country`, `reference_date`, `weight` and `occupation_isco`. `isic`, `size`, `employees`, `legal_form`, `incorporated_only`, `place`, `safe` and `weighted` are used as given; `founder_surname` is left to the draw unless you set it.
+- **A work address.** There is no work email in the persona; to write one, take a local part from email-generator and put the employer's domain after the `@`: `email.local + "@" + p.employer->domain`. Leave out the birth year, which a work address does not carry.
+- **Off by default.** The employer draws from its own stream, so the rest of the persona is the same with and without it. Its data is loaded by the first persona that asks; pass your own instance through `psg::sources::company`. The signature combines company-generator's data hash.
 
 ## Migrating to v3
 

@@ -4,7 +4,7 @@
 import { versions } from './versions.mjs';
 import { batchPlan, integer, malformed, outOfRange, seedText } from './batch.mjs';
 
-const keys = new Set(['country', 'sex', 'ages', 'traits', 'referenceDate', 'relations', 'identity', 'finance', 'safe', 'home', 'seed']);
+const keys = new Set(['country', 'sex', 'ages', 'traits', 'referenceDate', 'relations', 'identity', 'finance', 'safe', 'home', 'employer', 'seed']);
 const documentKinds = new Set(['passport', 'id_card']);
 const accountKinds = new Set(['current', 'savings']);
 const cardKinds = new Set(['debit', 'credit', 'prepaid', 'any']);
@@ -122,11 +122,11 @@ export async function createGenerator(createModule, moduleOptions) {
   const generate = module.cwrap('dasmig_persona_generate', 'string',
     ['string', 'string', 'number', 'number', 'number', 'string', 'string',
       'number', 'string', 'number', 'string', 'string', 'string', 'string', 'number',
-      'number', 'string', 'string', 'string', 'string']);
+      'number', 'string', 'string', 'string', 'number', 'string']);
   const generateBatchRaw = module.cwrap('dasmig_persona_generate_batch', 'string',
     ['string', 'string', 'number', 'number', 'number', 'string', 'string',
       'number', 'string', 'number', 'string', 'string', 'string', 'string', 'number',
-      'number', 'string', 'string', 'string', 'string', 'number', 'number']);
+      'number', 'string', 'string', 'string', 'number', 'string', 'number', 'number']);
   const requestKeys = new Set([...keys].filter(key => key !== 'seed'));
   const info = parse(module.cwrap('dasmig_persona_info', 'string', [])());
   const countries = Object.freeze([...info.countries]);
@@ -137,7 +137,7 @@ export async function createGenerator(createModule, moduleOptions) {
     if (request === null || typeof request !== 'object' || Array.isArray(request)) malformed('must be an object');
     for (const key of Object.keys(request))
       if (!allowed.has(key)) malformed(`unknown field "${key}"; the fields are ${[...allowed].join(', ')}`);
-    const { country, sex, ages, traits, referenceDate, relations, identity, finance, safe, home } = request;
+    const { country, sex, ages, traits, referenceDate, relations, identity, finance, safe, home, employer } = request;
 
     let code = '';
     if (country !== undefined) {
@@ -157,8 +157,9 @@ export async function createGenerator(createModule, moduleOptions) {
     }
     const count = traits === undefined ? -1 : integer(traits, 'traits', 0, info.max_traits);
     if (safe !== undefined && typeof safe !== 'boolean') malformed('safe must be a boolean');
+    if (employer !== undefined && typeof employer !== 'boolean') malformed('employer must be a boolean');
     return [code, sex ?? '', min, max, count, dateText(referenceDate), relationsText(relations),
-      ...identityArgs(identity), ...financeArgs(finance), safe ? 1 : 0, ...homeArgs(home)];
+      ...identityArgs(identity), ...financeArgs(finance), safe ? 1 : 0, ...homeArgs(home), employer ? 1 : 0];
   }
 
   function generateJson(request = {}) {
@@ -180,6 +181,7 @@ export async function createGenerator(createModule, moduleOptions) {
     financeDataHash: info.finance_data,
     propertyDataHash: info.property_data,
     relationshipDataHash: info.relationship_data,
+    companyDataHash: info.company_data,
     versions,
     generateJson(request) {
       const json = generateJson(request);

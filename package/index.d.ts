@@ -131,6 +131,14 @@ export interface PersonaRequest {
     area?: 'city' | 'town' | 'rural';
   };
   /**
+   * Add `employer`, the company the persona works for (company-generator): its name, industry, size,
+   * legal form, founding date, registration numbers and domain. A business is drawn by its staff, in
+   * the persona's country, in an industry that employs the persona's occupation. A persona who is not
+   * employed has none. With `safe`, its numbers and domain are safe too. Unset, nothing about the
+   * persona changes.
+   */
+  employer?: boolean;
+  /**
    * The call seed, a 64-bit unsigned integer: a bigint, a non-negative safe integer, or a string
    * of 1-16 **hexadecimal** digits with an optional `0x` (so `'42'` is 0x42, not 42), the form of
    * `signature.seed`. Unset draws a random one. The same seed, request and data give the same persona.
@@ -347,6 +355,31 @@ export interface Home {
   signature: Signature;
 }
 
+/** A company, as company-generator writes it. */
+export interface Company {
+  country_code: string;
+  name: string;
+  /** The name without the legal form. */
+  short_name: string;
+  /** ISIC Rev. 4 division and its section letter. */
+  isic: string;
+  isic_label: string;
+  isic_section: string;
+  size: 'micro' | 'small' | 'medium' | 'large';
+  /** Persons employed, the owner counted. */
+  employees: number;
+  legal_form: string;
+  legal_form_code: string;
+  legal_form_group: 'sole_proprietorship' | 'partnership' | 'limited_liability' | 'other';
+  /** `YYYY-MM-DD`. */
+  founded: string;
+  numbers: { scheme: string; label: string; value: string; compact: string; reserved: boolean }[];
+  domain: string;
+  /** The weakest evidence of the statistical fields. */
+  evidence: 'measured' | 'modelled' | 'filled';
+  signature: Signature;
+}
+
 /** One persona: each library's result, as that library writes it. */
 export interface Persona {
   name: string;
@@ -371,6 +404,8 @@ export interface Persona {
   home?: Home;
   /** Only with `home`: the household's gross annual earnings, which the home's cost is drawn from; null when nobody in it earns. */
   household_income?: Money | null;
+  /** Only with `employer`: as company-generator writes it, or null when the persona is not employed. */
+  employer?: Company | null;
   /** `generate({ ...request, seed: persona.signature.seed })` replays this persona. */
   signature: Signature;
 }
@@ -393,6 +428,8 @@ export interface PersonaGenerator {
   readonly propertyDataHash: string;
   /** relationship-generator's data hash, combined after property-generator's for a persona with `home`. */
   readonly relationshipDataHash: string;
+  /** company-generator's data hash, combined last into the signature of a persona with `employer`. */
+  readonly companyDataHash: string;
   /** The library versions (git tags) this module was built from. */
   readonly versions: Readonly<Record<string, string>>;
   /**

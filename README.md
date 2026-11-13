@@ -42,23 +42,25 @@ These apply when a request asks for `identity` or `finance`. Without them, a per
 
 - **A Home, When Asked**. Set `home` to also get the persona's home from [property-generator](https://github.com/dasmig/property-generator): dwelling type, tenure, rooms, floor area, year built and monthly cost, fitted to the city, the household and what everyone in it earns (an occupation draw for each other adult). With `relations`, the home fits the family shown. Off by default; turning it on changes nothing else.
 
+- **An Employer, When Asked**. Set `employer` to also get the company the persona works for from [company-generator](https://github.com/dasmig/company-generator): its name, industry, size, legal form, founding date, registration numbers and domain. A business is drawn by its staff, in the persona's country, in an industry that employs the persona's occupation (a farm worker's employer is a farm). A persona who is not employed has none. Off by default; turning it on changes nothing else.
+
 - **Deterministic Seeding**. `get_persona(request, seed)` is a pure function of the request, the seed and the data, and `persona::seed()` replays a previous persona. Each library draws from its own stream split from the seed, so forcing one choice does not shift the others.
 
 - **Identical Everywhere**. A seed gives the same result on every compiler, standard library and CPU (GCC, Clang, MSVC, Emscripten; x86-64 and ARM64), checked by known-answer tests.
 
-- **JSON and Replay**. `to_json()` writes every library's result as that library writes it; `signature()` records the seed and a hash of the data of all eight libraries and the request (and id-generator's, finance-generator's, or property-generator's and relationship-generator's, for a persona with papers, a wallet or a home).
+- **JSON and Replay**. `to_json()` writes every library's result as that library writes it; `signature()` records the seed and a hash of the data of all eight libraries and the request (and id-generator's, finance-generator's, property-generator's and relationship-generator's, or company-generator's, for a persona with papers, a wallet, a home or an employer).
 
 - **Your Data**. The generator holds no data of its own. It calls the instances of the libraries, so their tiers (`lite`, `full`) and layers (`extend()`) are the persona's. Construct a `psg` over your own instances to use different data side by side.
 
 ## Integration
 
-[`personagen.hpp`](https://github.com/dasmig/persona-generator/blob/main/dasmig/personagen.hpp) is the library [released here](https://github.com/dasmig/persona-generator/releases). It composes these libraries, which must be on the include path (with `dasmig-core` in each): [biodata](https://github.com/dasmig/biodata-generator), [birth](https://github.com/dasmig/birth-generator), [city](https://github.com/dasmig/city-generator), [country](https://github.com/dasmig/country-generator), [entity](https://github.com/dasmig/entity-generator), [finance](https://github.com/dasmig/finance-generator), [id](https://github.com/dasmig/id-generator), [interest](https://github.com/dasmig/interest-generator), [name](https://github.com/dasmig/name-generator), [occupation](https://github.com/dasmig/occupation-generator), [property](https://github.com/dasmig/property-generator), [relationship](https://github.com/dasmig/relationship-generator) and [trait](https://github.com/dasmig/trait-generator). The release notes list the versions it was tested with. Add
+[`personagen.hpp`](https://github.com/dasmig/persona-generator/blob/main/dasmig/personagen.hpp) is the library [released here](https://github.com/dasmig/persona-generator/releases). It composes these libraries, which must be on the include path (with `dasmig-core` in each): [biodata](https://github.com/dasmig/biodata-generator), [birth](https://github.com/dasmig/birth-generator), [city](https://github.com/dasmig/city-generator), [company](https://github.com/dasmig/company-generator), [country](https://github.com/dasmig/country-generator), [entity](https://github.com/dasmig/entity-generator), [finance](https://github.com/dasmig/finance-generator), [id](https://github.com/dasmig/id-generator), [interest](https://github.com/dasmig/interest-generator), [name](https://github.com/dasmig/name-generator), [occupation](https://github.com/dasmig/occupation-generator), [property](https://github.com/dasmig/property-generator), [relationship](https://github.com/dasmig/relationship-generator) and [trait](https://github.com/dasmig/trait-generator). The release notes list the versions it was tested with. Add
 
 ```cpp
 #include <dasmig/personagen.hpp>
 ```
 
-to the files you want to use it in. Each library finds its data as it does alone (a `resources` folder, or its compiled-in `lite` tier: define `DASMIG_COUNTRY_EMBED`, `DASMIG_CITY_EMBED`, `DASMIG_BIRTH_EMBED`, `DASMIG_BIODATA_EMBED`, `DASMIG_NAME_EMBED`, `DASMIG_INTEREST_EMBED`, `DASMIG_OCCUPATION_EMBED` and `DASMIG_TRAIT_EMBED`, plus `DASMIG_ID_EMBED`, `DASMIG_FINANCE_EMBED` and `DASMIG_PROPERTY_EMBED` for `identity`, `finance` and `home`).
+to the files you want to use it in. Each library finds its data as it does alone (a `resources` folder, or its compiled-in `lite` tier: define `DASMIG_COUNTRY_EMBED`, `DASMIG_CITY_EMBED`, `DASMIG_BIRTH_EMBED`, `DASMIG_BIODATA_EMBED`, `DASMIG_NAME_EMBED`, `DASMIG_INTEREST_EMBED`, `DASMIG_OCCUPATION_EMBED` and `DASMIG_TRAIT_EMBED`, plus `DASMIG_ID_EMBED`, `DASMIG_FINANCE_EMBED`, `DASMIG_PROPERTY_EMBED` and `DASMIG_COMPANY_EMBED` for `identity`, `finance`, `home` and `employer`).
 
 ## Usage
 
