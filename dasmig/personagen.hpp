@@ -209,7 +209,7 @@ class persona
     /// `occupation`), next to `name`, `sex`, `age`, `admin1` and `signature`,
     /// and `relatives` (the family), `identity`, `finance`, and `home` with
     /// `household_income` when the request asked for them, and `employer` when
-    /// it asked and the persona is employed.
+    /// it asked (null when the persona is not employed).
     /// @param w Writer positioned where a value is allowed.
     void to_json(core::json_writer& w) const
     {
@@ -260,6 +260,11 @@ class persona
             w.key("employer");
             employer->to_json(w);
         }
+        else if (_employer_asked)
+        {
+            w.key("employer");
+            w.value(nullptr); // asked for, and the persona is not employed
+        }
         w.key("signature");
         _signature.to_json(w);
         w.end_object();
@@ -293,6 +298,7 @@ class persona
 
   private:
     core::seed_signature _signature;
+    bool _employer_asked{false}; ///< `persona_request::employer` was set, so JSON has the key even when it is null.
     friend class psg;
 };
 
@@ -758,6 +764,7 @@ class psg
     // job's ISCO group, and a business is drawn by its staff.
     void add_employer_(company_request cr, const persona_request& request, persona& p, std::uint64_t call_seed) const
     {
+        p._employer_asked = true;
         if (p.job.status != employment_status::employed || !p.job.job) return;
         const cpg& source = _from.company != nullptr ? *_from.company : cpg::instance();
         cr.country = p.country_info.cca2;

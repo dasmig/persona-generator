@@ -161,7 +161,12 @@ for (let s = 0; s < 500; ++s) {
   const json = personas.generateJson({ employer: true, seed: s }).replace(/"admin1":"(?:[^"\\]|\\.)*"/,'"admin1":""');
   for (const byte of encoder.encode(json)) hash = ((hash ^ BigInt(byte)) * 0x100000001b3n) & mask;
 }
-assert.equal(hash.toString(16), '3d4154f8f95d2f37');
+assert.equal(hash.toString(16), 'a9fb7f3e2aeb6cc3');
+for (let s = 0; s < 60; ++s) {
+  const p = personas.generate({ employer: true, seed: s });
+  assert.equal(p.employer === null, p.occupation.status !== 'employed', 'only an employed persona has an employer');
+}
+assert.ok(!('employer' in personas.generate({ seed: 1 })));
 for (const [request, type, pattern] of [
   [{ employer: 'yes' }, TypeError, /employer must be a boolean/],
 ]) assert.throws(() => personas.generate(request), type, JSON.stringify(request));

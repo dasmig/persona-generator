@@ -227,8 +227,8 @@ extern "C"
 /// @param home_type, home_tenure, home_area The dwelling type, tenure and area
 ///        to force (property-generator's names), or "" to draw them.
 /// @param employer Non-zero to add the company the persona works for
-///        (persona_request::employer), under `employer`; a persona who is not
-///        employed has none. `safe` makes its numbers and domain safe too.
+///        (persona_request::employer), under `employer`; null for a persona who
+///        is not employed. `safe` makes its numbers and domain safe too.
 /// @param seed 1 to 16 hexadecimal digits, or "" for a random seed (the
 ///        persona's signature has the seed that replays it).
 EMSCRIPTEN_KEEPALIVE const char* dasmig_persona_generate(const char* country, const char* sex, int age_min,

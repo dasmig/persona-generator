@@ -404,8 +404,8 @@ export interface Persona {
   home?: Home;
   /** Only with `home`: the household's gross annual earnings, which the home's cost is drawn from; null when nobody in it earns. */
   household_income?: Money | null;
-  /** Only with `employer`, and only for an employed persona; as company-generator writes it. */
-  employer?: Company;
+  /** Only with `employer`: as company-generator writes it, or null when the persona is not employed. */
+  employer?: Company | null;
   /** `generate({ ...request, seed: persona.signature.seed })` replays this persona. */
   signature: Signature;
 }

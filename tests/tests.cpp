@@ -918,7 +918,7 @@ TEST_CASE("an employer is off by default and then changes nothing", "[employer]"
     const auto plain = gen.get_persona(request_for("DE"), seed_a);
     REQUIRE_FALSE(plain.employer.has_value());
     REQUIRE(plain.to_json().find("\"employer\"") == std::string::npos);
-    std::size_t employed = 0;
+    std::size_t employed = 0, not_employed = 0;
     for (std::uint64_t seed = 0; seed < 300; ++seed)
     {
         persona_request request;
@@ -926,12 +926,25 @@ TEST_CASE("an employer is off by default and then changes nothing", "[employer]"
         request.employer = dasmig::company_request{};
         auto with = gen.get_persona(request, seed);
         REQUIRE(with.employer.has_value() == (p.job.status == dasmig::employment_status::employed));
-        if (!with.employer) continue;
-        ++employed;
+        // Asked for, the key is there for everyone: null when not employed.
+        REQUIRE(with.to_json().find("\"employer\":") != std::string::npos);
+        if (with.employer) ++employed;
+        else
+        {
+            ++not_employed;
+            REQUIRE(with.to_json().find("\"employer\":null") != std::string::npos);
+        }
+        // Nothing else moved: without the employer's key it is the persona without the request.
         with.employer.reset();
-        REQUIRE(without_signature(with.to_json()) == without_signature(p.to_json()));
+        auto json = without_signature(with.to_json());
+        constexpr std::string_view null_employer = ",\"employer\":null";
+        const auto key = json.find(null_employer);
+        REQUIRE(key != std::string::npos);
+        json.erase(key, null_employer.size());
+        REQUIRE(json == without_signature(p.to_json()));
     }
     REQUIRE(employed > 100);
+    REQUIRE(not_employed > 20);
 }
 
 TEST_CASE("the employer is in the persona's country and takes on its occupation", "[employer]")
@@ -1052,5 +1065,5 @@ TEST_CASE("known answers with an employer", "[employer][kat]")
         hash = dasmig::core::hash_combine(hash, dasmig::core::fnv1a64(gen.get_persona(drawn, s).to_json()));
     }
     INFO(std::format("{:016x}", hash));
-    REQUIRE(hash == 0x86051e006fe71c47ULL);
+    REQUIRE(hash == 0x0a2d0979aa9ce719ULL);
 }
