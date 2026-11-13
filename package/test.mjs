@@ -31,8 +31,9 @@ assert.equal(personas.identityDataHash, '14750e64ceb541ac');
 assert.equal(personas.financeDataHash, '2ef270849d0c325c');
 assert.equal(personas.propertyDataHash, 'df6af68d1dd6d658');
 assert.equal(personas.relationshipDataHash, 'a4516485553c1cc1');
+assert.equal(personas.companyDataHash, '5fa2cadd5c7a71af');
 assert.equal(personas.versions['persona-generator'].startsWith('v'), true, JSON.stringify(personas.versions));
-assert.equal(Object.keys(personas.versions).length, 14);
+assert.equal(Object.keys(personas.versions).length, 15);
 assert.ok(Object.isFrozen(personas) && Object.isFrozen(personas.countries));
 
 // Known answers.
@@ -143,6 +144,26 @@ for (const [request, type, pattern] of [
   [{ home: { type: 'castle' } }, RangeError, /home.type must be one of/],
   [{ home: { tenure: 3 } }, TypeError, /home.tenure must be one of/],
   [{ home: { rooms: 3 } }, TypeError, /unknown home field/],
+]) assert.throws(() => personas.generate(request), type, JSON.stringify(request));
+
+// An employer: off by default, and nothing else changes when it is on.
+const jobRequest = { country: 'BR', sex: 'female', ages: { min: 30, max: 40 }, employer: true, safe: true };
+const employed = personas.generate({ ...jobRequest, seed: 0 });
+assert.equal(employed.employer.country_code, 'BR');
+assert.equal(employed.employer.name, 'Clube do Norte');
+assert.deepEqual([employed.employer.isic, employed.employer.size, employed.employer.employees], ['93', 'micro', 2]);
+assert.ok(employed.employer.domain.endsWith('.example'));
+const { employer: e_, signature: es_, ...withoutEmployer } = employed;
+const { signature: es2_, ...unemployed } = personas.generate({ ...jobRequest, employer: undefined, safe: undefined, seed: 0 });
+assert.deepEqual(Object.keys(withoutEmployer), Object.keys(unemployed));
+hash = 0xcbf29ce484222325n;
+for (let s = 0; s < 500; ++s) {
+  const json = personas.generateJson({ employer: true, seed: s }).replace(/"admin1":"(?:[^"\\]|\\.)*"/,'"admin1":""');
+  for (const byte of encoder.encode(json)) hash = ((hash ^ BigInt(byte)) * 0x100000001b3n) & mask;
+}
+assert.equal(hash.toString(16), '3d4154f8f95d2f37');
+for (const [request, type, pattern] of [
+  [{ employer: 'yes' }, TypeError, /employer must be a boolean/],
 ]) assert.throws(() => personas.generate(request), type, JSON.stringify(request));
 
 // Admin1 names are embedded.

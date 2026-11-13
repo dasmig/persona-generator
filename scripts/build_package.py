@@ -27,7 +27,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 
 # Libraries with data compiled into the module.
-DATA_LIBRARIES = ["country", "city", "birth", "biodata", "name", "interest", "occupation", "trait", "relationship", "id", "finance", "property"]
+DATA_LIBRARIES = ["country", "city", "birth", "biodata", "name", "interest", "occupation", "trait", "relationship", "id", "finance", "property", "company"]
 # Header-only libraries compiled in without data.
 CODE_LIBRARIES = ["entity"]
 # Every library the module is built from, for versions.mjs (persona itself first).

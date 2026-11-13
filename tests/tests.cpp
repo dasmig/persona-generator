@@ -907,3 +907,150 @@ TEST_CASE("known answers with a home", "[home][kat]")
     INFO(std::format("{:016x}", hash));
     REQUIRE(hash == 0xb225d3b9a2172226ULL);
 }
+
+// ---------------------------------------------------------------------------
+// Employer
+// ---------------------------------------------------------------------------
+
+TEST_CASE("an employer is off by default and then changes nothing", "[employer]")
+{
+    const auto& gen = psg::instance();
+    const auto plain = gen.get_persona(request_for("DE"), seed_a);
+    REQUIRE_FALSE(plain.employer.has_value());
+    REQUIRE(plain.to_json().find("\"employer\"") == std::string::npos);
+    std::size_t employed = 0;
+    for (std::uint64_t seed = 0; seed < 300; ++seed)
+    {
+        persona_request request;
+        const auto p = gen.get_persona(request, seed);
+        request.employer = dasmig::company_request{};
+        auto with = gen.get_persona(request, seed);
+        REQUIRE(with.employer.has_value() == (p.job.status == dasmig::employment_status::employed));
+        if (!with.employer) continue;
+        ++employed;
+        with.employer.reset();
+        REQUIRE(without_signature(with.to_json()) == without_signature(p.to_json()));
+    }
+    REQUIRE(employed > 100);
+}
+
+TEST_CASE("the employer is in the persona's country and takes on its occupation", "[employer]")
+{
+    const auto& gen = psg::instance();
+    for (const auto code : psg::supported_countries())
+    {
+        auto request = request_for(std::string{code});
+        request.employer = dasmig::company_request{};
+        request.employer->country = "US"; // replaced by the persona's
+        request.employer->weight = dasmig::company_weight::enterprises; // replaced too
+        for (std::uint64_t seed = 0; seed < 40; ++seed)
+        {
+            CAPTURE(code, seed);
+            const auto p = gen.get_persona(request, seed);
+            if (!p.employer) continue;
+            REQUIRE(p.employer->country_code == code);
+            REQUIRE(p.job.job.has_value());
+            REQUIRE_FALSE(p.employer->name.empty());
+        }
+    }
+}
+
+TEST_CASE("an employer is drawn by its staff", "[employer]")
+{
+    const auto& gen = psg::instance();
+    auto request = request_for("DE");
+    request.employer = dasmig::company_request{};
+    std::size_t large = 0, jobs = 0;
+    for (std::uint64_t seed = 0; seed < 600; ++seed)
+    {
+        const auto p = gen.get_persona(request, seed);
+        if (!p.employer) continue;
+        ++jobs;
+        if (p.employer->employees >= 50) ++large;
+    }
+    // By enterprises most firms are micro; by employment about half of the staff
+    // work in firms of 50 or more.
+    REQUIRE(jobs > 200);
+    REQUIRE(large * 5 > jobs);
+}
+
+TEST_CASE("the employer request's own fields pass through", "[employer]")
+{
+    const auto& gen = psg::instance();
+    auto request = request_for("ES");
+    request.employer = dasmig::company_request{};
+    request.employer->incorporated_only = true;
+    request.employer->safe = true;
+    request.employer->founder_surname = "Hoffmann"; // used as given
+    for (std::uint64_t seed = 0; seed < 60; ++seed)
+    {
+        const auto p = gen.get_persona(request, seed);
+        if (!p.employer) continue;
+        REQUIRE(p.employer->legal_form_group != "sole_proprietorship");
+        REQUIRE(p.employer->domain.ends_with(".example"));
+    }
+}
+
+TEST_CASE("an employer in JSON comes after the rest", "[employer][output]")
+{
+    const auto& gen = psg::instance();
+    auto request = request_for("GB");
+    request.home = dasmig::property_request{};
+    request.employer = dasmig::company_request{};
+    std::uint64_t seed = 0;
+    while (!gen.get_persona(request, seed).employer) ++seed;
+    const auto json = gen.get_persona(request, seed).to_json();
+    const auto income = json.find("\"household_income\":");
+    const auto employer = json.find("\"employer\":{");
+    REQUIRE(income < employer);
+    REQUIRE(employer < json.rfind("\"signature\":"));
+}
+
+TEST_CASE("the employer comes from the generator's own instance", "[employer][loading]")
+{
+    dasmig::cpg no_companies;
+    const psg own{psg::sources{.company = &no_companies}};
+    auto with = request_for("FR");
+    with.employer = dasmig::company_request{};
+    std::uint64_t seed = 0;
+    while (psg::instance().get_persona(with, seed).employer == std::nullopt) ++seed;
+    REQUIRE_THROWS(own.get_persona(with, seed));
+    REQUIRE_NOTHROW(own.get_persona(request_for("FR"), seed));
+}
+
+TEST_CASE("an employer: a persona batch with one is the same for any thread count", "[employer][batch]")
+{
+    const auto& gen = psg::instance();
+    auto request = persona_request{};
+    request.employer = dasmig::company_request{};
+    const auto one = gen.get_persona_batch(request, {.count = 200, .threads = 1}, 7);
+    const auto many = gen.get_persona_batch(request, {.count = 200, .threads = 4}, 7);
+    REQUIRE(one.size() == many.size());
+    for (std::size_t i = 0; i < one.size(); ++i) REQUIRE(one[i].to_json() == many[i].to_json());
+}
+
+TEST_CASE("known answers with an employer", "[employer][kat]")
+{
+    const auto& gen = psg::instance();
+    auto request = request_for("BR");
+    request.person_sex = dasmig::sex::female;
+    request.ages = dasmig::age_range{.min = 30, .max = 40};
+    request.employer = dasmig::company_request{};
+    request.employer->safe = true;
+    std::uint64_t seed = 0;
+    while (!gen.get_persona(request, seed).employer) ++seed;
+    const auto p = gen.get_persona(request, seed);
+    INFO(p.to_json());
+    REQUIRE(seed == 0);
+    REQUIRE(p.employer->to_string() == "BR, Clube do Norte, sports activities and amusement and recreation activities (93), 2 persons, founded 2020-09-20");
+
+    std::uint64_t hash = 0xcbf29ce484222325ULL;
+    persona_request drawn;
+    drawn.employer = dasmig::company_request{};
+    for (std::uint64_t s = 0; s < 500; ++s)
+    {
+        hash = dasmig::core::hash_combine(hash, dasmig::core::fnv1a64(gen.get_persona(drawn, s).to_json()));
+    }
+    INFO(std::format("{:016x}", hash));
+    REQUIRE(hash == 0x86051e006fe71c47ULL);
+}

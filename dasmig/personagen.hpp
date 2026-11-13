@@ -24,6 +24,7 @@
 #include <dasmig/biodatagen.hpp>
 #include <dasmig/birthgen.hpp>
 #include <dasmig/citygen.hpp>
+#include <dasmig/companygen.hpp>
 #include <dasmig/countrygen.hpp>
 #include <dasmig/entitygen.hpp>
 #include <dasmig/fingen.hpp>
@@ -125,6 +126,20 @@ struct persona_request
     /// parents. Drawn from its own seed, so the rest of the persona is the same
     /// with and without it.
     std::optional<property_request> home{}; // NOLINT(readability-redundant-member-init)
+
+    /// @brief Also draw the company the persona works for (company-generator).
+    ///        Unset by default, and then nothing about the persona changes.
+    ///
+    /// Its `country` and `reference_date` are replaced by the persona's, its
+    /// `weight` by `company_weight::employment` (each business counts for its
+    /// staff, as a worker's employer does) and its `occupation_isco` by the
+    /// persona's job, so the industry is one that employs that occupation; the
+    /// rest (`isic`, `size`, `employees`, `legal_form`, `incorporated_only`,
+    /// `place`, `safe`, `weighted`) is used as given. The founder's surname is
+    /// left to the draw. A persona who is not employed has no employer, whatever
+    /// the request. Drawn from its own seed, so the rest of the persona is the
+    /// same with and without it.
+    std::optional<company_request> employer{}; // NOLINT(readability-redundant-member-init)
 };
 
 /// @brief Return type for persona generation.
@@ -148,6 +163,7 @@ class persona
     std::optional<dasmig::identity> papers{}; ///< National numbers and documents; set only when `persona_request::identity` was. // NOLINT(readability-redundant-member-init)
     std::optional<dasmig::finance> wallet{};  ///< Bank accounts and payment cards; set only when `persona_request::finance` was. // NOLINT(readability-redundant-member-init)
     std::optional<dasmig::property> home{};   ///< The home; set only when `persona_request::home` was. // NOLINT(readability-redundant-member-init)
+    std::optional<dasmig::company> employer{}; ///< The company the persona works for; set only when `persona_request::employer` was and the persona is employed. // NOLINT(readability-redundant-member-init)
     std::optional<core::money> household_income{}; ///< Gross annual earnings of the home's household, which its monthly cost is drawn from; set with `home` when someone in it earns. // NOLINT(readability-redundant-member-init)
 
     /// @brief Retrieve the random seed used to generate this persona.
@@ -158,8 +174,9 @@ class persona
     /// @brief The seed and the data this persona was generated from.
     /// @return The replay signature; `data` combines the data hashes of the
     ///         eight libraries and the request, and id-generator's,
-    ///         finance-generator's, and property-generator's and
-    ///         relationship-generator's for a persona with those parts.
+    ///         finance-generator's, property-generator's and
+    ///         relationship-generator's, and company-generator's for a
+    ///         persona with those parts.
     [[nodiscard]] const core::seed_signature& signature() const
     {
         return _signature;
@@ -191,7 +208,8 @@ class persona
     /// (`country`, `city`, `birth`, `biodata`, `personality`, `interest`,
     /// `occupation`), next to `name`, `sex`, `age`, `admin1` and `signature`,
     /// and `relatives` (the family), `identity`, `finance`, and `home` with
-    /// `household_income` when the request asked for them.
+    /// `household_income` when the request asked for them, and `employer` when
+    /// it asked and the persona is employed.
     /// @param w Writer positioned where a value is allowed.
     void to_json(core::json_writer& w) const
     {
@@ -236,6 +254,11 @@ class persona
             w.key("household_income");
             if (household_income) household_income->write_json(w);
             else w.value(nullptr);
+        }
+        if (employer)
+        {
+            w.key("employer");
+            employer->to_json(w);
         }
         w.key("signature");
         _signature.to_json(w);
@@ -310,6 +333,7 @@ class psg
         idg* identity{nullptr}; ///< Numbers and documents, for persona_request::identity; null uses idg::instance(), loaded when a persona first asks.
         fng* finance{nullptr};  ///< Accounts and cards, for persona_request::finance; null uses fng::instance(), loaded when a persona first asks.
         pty* property{nullptr}; ///< Homes, for persona_request::home; null uses pty::instance(), loaded when a persona first asks.
+        cpg* company{nullptr};  ///< Employers, for persona_request::employer; null uses cpg::instance(), loaded when a persona first asks.
     };
 
     /// @brief Draws from the singletons of the eight libraries.
@@ -468,6 +492,7 @@ class psg
         if (request.identity) add_identity_(*request.identity, request, named, p, call_seed);
         if (request.finance) add_finance_(*request.finance, request, named, p, call_seed);
         if (request.home) add_home_(*request.home, request, named, p, call_seed);
+        if (request.employer) add_employer_(*request.employer, request, p, call_seed);
         return p;
     }
 
@@ -727,6 +752,20 @@ class psg
         }
         p._signature.data = core::hash_combine(p._signature.data, source.data_hash());
         p._signature.data = core::hash_combine(p._signature.data, _from.relationship->data_hash());
+    }
+
+    // The company a working persona is employed by: the industry follows the
+    // job's ISCO group, and a business is drawn by its staff.
+    void add_employer_(company_request cr, const persona_request& request, persona& p, std::uint64_t call_seed) const
+    {
+        if (p.job.status != employment_status::employed || !p.job.job) return;
+        const cpg& source = _from.company != nullptr ? *_from.company : cpg::instance();
+        cr.country = p.country_info.cca2;
+        cr.weight = company_weight::employment;
+        cr.occupation_isco = p.job.job->isco;
+        cr.reference_date = request.reference_date;
+        p.employer = source.get_company(cr, core::rng{call_seed}.split("employer").seed());
+        p._signature.data = core::hash_combine(p._signature.data, source.data_hash());
     }
 
     static constexpr unsigned earning_age_ = 15;

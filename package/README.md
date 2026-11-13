@@ -79,6 +79,7 @@ Every field is optional. What is left out is drawn; what is given conditions the
 | `finance` | `true` for one current account, or `{ accounts, cards, cardNumbers, network }`: a chance, by the country's Global Findex shares | none |
 | `safe` | `true` to make the numbers, documents, accounts and cards by the libraries' safe methods | `false` |
 | `home` | `true`, or `{ type, tenure, area }` to force them: also draw the persona's home into `home` and its household's earnings into `household_income` | none |
+| `employer` | `true`: also draw the company the persona works for into `employer`, if the persona is employed; `safe` makes its numbers and domain safe too | `false` |
 | `seed` | A `bigint`, a non-negative safe integer, or a **hexadecimal** string | Random |
 
 - **Countries.** Only the countries in `personas.countries` have data in all eight libraries, so another code is an error rather than a persona with a name from the wrong culture.
@@ -86,6 +87,7 @@ Every field is optional. What is left out is drawn; what is given conditions the
 - **Papers and wallet.** Numbers, accounts and cards are test data. Without `safe` they are structurally valid and may match a real person's: never use them to identify anyone, to open accounts, to pass a check, or on a live payment system. See [the limits](https://github.com/dasmig/persona-generator#limits).
 - **Family.** `relations: true` adds `relatives`: the persona's parents, siblings, half-siblings, partners and children (`up: 2` adds grandparents, `down: 2` grandchildren), each with a name, birth date and, for the dead, a death date, linked by `edges`. `members[0]` is the persona. `stepparents: true` adds a parent's new partner (`stepfather`, `stepmother`, with a `step_parent_of` edge), the children the parent had with them (half-siblings) and their own children from before (`stepsibling`) and `home: true` adds `household`, who the persona lives with. Both are off by default. The family has its own seed stream, so the rest of the persona is identical with and without it.
 - **Home.** `home: true` adds `home` (property-generator's dwelling type, tenure, rooms, floor area, year built and `monthly_cost`) and `household_income`, what everyone in the household earns. With `relations`, the home fits the family's `household`, which a home turns on; without, a household is drawn for the home alone. `monthly_cost` and `household_income` are `null` when nobody in the household earns.
+- **Employer.** `employer: true` adds `employer` (company-generator's name, industry, size, legal form, founding date, registration numbers and domain) for an employed persona. A business is drawn by its staff, in an industry that employs the persona's occupation.
 - **Dates.** The generator never reads the clock. Pass `referenceDate: new Date()` for ages as of today, and keep the date with the seed if the persona must replay.
 - **Seeds.** A seed is a 64-bit unsigned integer. A string is read as hexadecimal, optionally after `0x`, which is the form of `signature.seed`: `seed: '42'` is 0x42 (66), not 42. Use a `bigint` or a hexadecimal string for seeds above `Number.MAX_SAFE_INTEGER`.
 
@@ -123,7 +125,7 @@ pool.close();
 
 To recreate a persona later (for example, from a saved game), store its `signature.seed` and the request it was made with, including `referenceDate`.
 
-The same seed and request give the same persona **only with the same data**. `personas.dataHash` identifies the data of all eight libraries, `personas.identityDataHash` id-generator's, `personas.financeDataHash` finance-generator's, `personas.propertyDataHash` and `personas.relationshipDataHash` the two a home adds, and `personas.versions` lists the library versions the module was built from. Store `dataHash` with the seed: if a package update changes it, the saved seed gives a different persona.
+The same seed and request give the same persona **only with the same data**. `personas.dataHash` identifies the data of all eight libraries, `personas.identityDataHash` id-generator's, `personas.financeDataHash` finance-generator's, `personas.propertyDataHash` and `personas.relationshipDataHash` the two a home adds, `personas.companyDataHash` the one an employer adds, and `personas.versions` lists the library versions the module was built from. Store `dataHash` with the seed: if a package update changes it, the saved seed gives a different persona.
 
 Each part of a persona also has a `signature`, with its own seed and its library's data hash.
 
